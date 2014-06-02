@@ -68,7 +68,6 @@ public:
      *  cache (e.g. to look for leaks).
      */
     static void PurgeAll();
-    static void PurgeAll(bool force);
 
     /**
      *  Debugging only: dumps the status of the typefaces in the cache

@@ -42,14 +42,6 @@ struct FamilyData {
     int currentTag;                    // A flag to indicate whether we're in nameset/fileset tags
 };
 
-static const uint32_t MONOSPACE_FONTS_COUNT = 4;
-static const char* MONOSPACE_FONTS[] = {
-    "monospace",
-    "courier",
-    "courier new",
-    "monaco"
-};
-
 /**
  * Handler for arbitrary text. This is used to parse the text inside each name
  * or file tag. The resulting strings are put into the fNames or FontFileInfo arrays.
