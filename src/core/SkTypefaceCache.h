@@ -89,6 +89,7 @@ private:
     static SkTypefaceCache& Get();
 
     void purge(int count, bool force);
+    void purgeAll(bool force);
 
     struct Rec {
         SkTypeface*         fFace;
