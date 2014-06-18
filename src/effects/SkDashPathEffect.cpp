@@ -528,7 +528,7 @@ bool SkDashPathEffect::asPoints(PointData* results,
     return true;
 }
 
-SkFlattenable::Factory SkDashPathEffect::getFactory() const {
+SkFlattenable::Factory SkDashPathEffect::getFactory() {
     return fInitialDashLength < 0 ? NULL : CreateProc;
 }
 
@@ -555,5 +555,5 @@ SkDashPathEffect::SkDashPathEffect(SkFlattenableReadBuffer& buffer) : INHERITED(
 
     fCount = buffer.getArrayCount();
     fIntervals = (SkScalar*)sk_malloc_throw(sizeof(SkScalar) * fCount);
-    buffer.readScalarArray(fIntervals, fCount);
+    buffer.readScalarArray(fIntervals);
 }

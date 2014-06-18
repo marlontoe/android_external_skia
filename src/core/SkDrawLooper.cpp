@@ -11,6 +11,8 @@
 #include "SkPaint.h"
 #include "SkRect.h"
 
+SK_DEFINE_INST_COUNT(SkDrawLooper)
+
 bool SkDrawLooper::canComputeFastBounds(const SkPaint& paint) {
     SkCanvas canvas;
 

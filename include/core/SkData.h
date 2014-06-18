@@ -11,7 +11,7 @@
 #ifndef SkData_DEFINED
 #define SkData_DEFINED
 
-#include "SkRefCnt.h"
+#include "SkFlattenable.h"
 
 struct SkFILE;
 
@@ -20,7 +20,7 @@ struct SkFILE;
  *  but the actual ptr that is returned (by data() or bytes()) is guaranteed
  *  to always be the same for the life of this instance.
  */
-class SK_API SkData : public SkRefCnt {
+class SK_API SkData : public SkFlattenable {
 public:
     SK_DECLARE_INST_COUNT(SkData)
 
@@ -126,6 +126,12 @@ public:
      */
     static SkData* NewEmpty();
 
+    SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkData)
+
+protected:
+    SkData(SkFlattenableReadBuffer&);
+    virtual void flatten(SkFlattenableWriteBuffer&) const SK_OVERRIDE;
+
 private:
     ReleaseProc fReleaseProc;
     void*       fReleaseProcContext;
@@ -136,10 +142,7 @@ private:
     SkData(const void* ptr, size_t size, ReleaseProc, void* context);
     virtual ~SkData();
 
-    // Called the first time someone calls NewEmpty to initialize the singleton.
-    static void NewEmptyImpl(SkData**);
-
-    typedef SkRefCnt INHERITED;
+    typedef SkFlattenable INHERITED;
 };
 
 /** Typedef of SkAutoTUnref<SkData> for automatically unref-ing a SkData. */

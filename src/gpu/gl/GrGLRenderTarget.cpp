@@ -52,15 +52,15 @@ GrGLRenderTarget::GrGLRenderTarget(GrGpuGL* gpu,
                          viewport.fWidth, viewport.fHeight,
                          desc.fConfig, desc.fSampleCnt,
                          desc.fOrigin)) {
-    SkASSERT(NULL != texID);
-    SkASSERT(NULL != texture);
+    GrAssert(NULL != texID);
+    GrAssert(NULL != texture);
     // FBO 0 can't also be a texture, right?
-    SkASSERT(0 != desc.fRTFBOID);
-    SkASSERT(0 != desc.fTexFBOID);
+    GrAssert(0 != desc.fRTFBOID);
+    GrAssert(0 != desc.fTexFBOID);
 
     // we assume this is true, TODO: get rid of viewport as a param.
-    SkASSERT(viewport.fWidth == texture->width());
-    SkASSERT(viewport.fHeight == texture->height());
+    GrAssert(viewport.fWidth == texture->width());
+    GrAssert(viewport.fHeight == texture->height());
 
     this->init(desc, viewport, texID);
 }

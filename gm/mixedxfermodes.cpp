@@ -32,7 +32,7 @@ protected:
 
     void drawShape(SkCanvas* canvas,
                    const SkPaint& paint,
-                   SkRandom* random) {
+                   SkMWCRandom* random) {
         static const SkRect kRect = SkRect::MakeXYWH(SkIntToScalar(-50), SkIntToScalar(-50),
                                                      SkIntToScalar(75), SkIntToScalar(105));
         int shape = random->nextULessThan(5);
@@ -102,7 +102,7 @@ protected:
         canvas->drawPaint(bgPaint);
         SkISize size = canvas->getDeviceSize();
         SkScalar maxScale = SkScalarSqrt((SkIntToScalar(size.fWidth * size.fHeight))) / 300;
-        SkRandom random;
+        SkMWCRandom random;
         for (int i = 0; i < kNumShapes; ++i) {
             SkScalar s = random.nextRangeScalar(SK_Scalar1 / 8, SK_Scalar1) * maxScale;
             SkScalar r = random.nextRangeScalar(0, SkIntToScalar(360));
@@ -123,11 +123,6 @@ protected:
             this->drawShape(canvas, p, &random);
             canvas->restore();
         }
-    }
-
-    virtual uint32_t onGetFlags() const {
-        // Skip PDF rasterization since rendering this PDF takes forever.
-        return kSkipPDFRasterization_Flag;
     }
 
 private:

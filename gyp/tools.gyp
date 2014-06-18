@@ -25,7 +25,6 @@
         'skpdiff',
         'skhello',
         'skimage',
-        'test_image_decoder',
       ],
       'conditions': [
         ['skia_shared_lib',
@@ -65,8 +64,7 @@
         '../tools/flags/SkCommandLineFlags.cpp',
       ],
       'include_dirs': [
-        '../tools/flags',
-        '../src/core/', # needed for SkTLList.h
+        '../tools/flags'
       ],
       'dependencies': [
         'skia_lib.gyp:skia_lib',
@@ -141,8 +139,8 @@
             '../tools/skhello.cpp',
           ],
           'dependencies': [
-            'flags.gyp:flags',
             'pdf.gyp:pdf',
+            'flags.gyp:flags',
           ],
         }],
       ],
@@ -158,10 +156,10 @@
         '../src/utils/',
       ],
       'dependencies': [
+        'skia_lib.gyp:skia_lib',
         'flags.gyp:flags',
         'gm.gyp:gm_expectations',
         'jsoncpp.gyp:jsoncpp',
-        'skia_lib.gyp:skia_lib',
         'utils.gyp:utils',
       ],
     },
@@ -174,13 +172,13 @@
         '../src/utils/SkLua.cpp',
       ],
       'dependencies': [
+        'skia_lib.gyp:skia_lib',
         'effects.gyp:effects',
+        'utils.gyp:utils',
         'images.gyp:images',
-        'lua.gyp:lua',
         'pdf.gyp:pdf',
         'ports.gyp:ports',
-        'skia_lib.gyp:skia_lib',
-        'utils.gyp:utils',
+        'lua.gyp:lua',
       ],
     },
     {
@@ -192,16 +190,16 @@
         '../src/utils/SkLua.cpp',
       ],
       'dependencies': [
+        'skia_lib.gyp:skia_lib',
         'effects.gyp:effects',
-        'flags.gyp:flags',
+        'utils.gyp:utils',
         'images.gyp:images',
-        'lua.gyp:lua',
         'tools.gyp:picture_renderer',
         'tools.gyp:picture_utils',
         'pdf.gyp:pdf',
         'ports.gyp:ports',
-        'skia_lib.gyp:skia_lib',
-        'utils.gyp:utils',
+        'flags.gyp:flags',
+        'lua.gyp:lua',
       ],
     },
     {
@@ -211,16 +209,13 @@
         '../tools/render_pictures_main.cpp',
       ],
       'include_dirs': [
-        '../src/core',
-        '../src/images',
-        '../src/lazy',
         '../src/pipe/utils/',
       ],
       'dependencies': [
-        'flags.gyp:flags',
         'skia_lib.gyp:skia_lib',
         'tools.gyp:picture_renderer',
         'tools.gyp:picture_utils',
+        'flags.gyp:flags',
       ],
     },
     {
@@ -235,16 +230,15 @@
         '../tools/PictureBenchmark.cpp',
       ],
       'include_dirs': [
-        '../src/core/',
         '../bench',
         '../src/lazy/',
       ],
       'dependencies': [
-        'bench.gyp:bench_timer',
-        'flags.gyp:flags',
         'skia_lib.gyp:skia_lib',
         'tools.gyp:picture_utils',
         'tools.gyp:picture_renderer',
+        'bench.gyp:bench_timer',
+        'flags.gyp:flags',
       ],
     },
     {
@@ -262,24 +256,14 @@
         '../src/pipe/utils/SamplePipeControllers.cpp',
       ],
       'include_dirs': [
-        '../src/core',
-        '../src/images',
-        '../src/lazy',
+        '../src/core/',
         '../src/pipe/utils/',
         '../src/utils/',
       ],
-      'direct_dependent_settings': {
-        'include_dirs': [
-          # needed for JSON headers used within PictureRenderer.h
-          '../third_party/externals/jsoncpp-chromium/overrides/include/',
-          '../third_party/externals/jsoncpp/include/',
-        ],
-      },
       'dependencies': [
-        'flags.gyp:flags',
-        'jsoncpp.gyp:jsoncpp',
         'skia_lib.gyp:skia_lib',
         'tools.gyp:picture_utils',
+        'flags.gyp:flags',
       ],
       'conditions': [
         ['skia_gpu == 1',
@@ -304,8 +288,8 @@
         '../src/utils/',
       ],
       'dependencies': [
-        'pdf.gyp:pdf',
         'skia_lib.gyp:skia_lib',
+        'pdf.gyp:pdf',
         'tools.gyp:picture_utils',
       ],
       'conditions': [
@@ -367,9 +351,9 @@
         '../tools/pinspect.cpp',
       ],
       'dependencies': [
-        'flags.gyp:flags',
         'skia_lib.gyp:skia_lib',
         'tools.gyp:picture_renderer',
+        'flags.gyp:flags',
       ],
     },
     {
@@ -387,11 +371,11 @@
         '../bench/TimerData.cpp',
       ],
       'dependencies': [
-        'bench.gyp:bench_timer',
-        'flags.gyp:flags',
         'skia_lib.gyp:skia_lib',
-        'tools.gyp:picture_renderer',
+        'bench.gyp:bench_timer',
         'tools.gyp:picture_utils',
+        'tools.gyp:picture_renderer',
+        'flags.gyp:flags',
       ],
     },
     {
@@ -415,16 +399,6 @@
       'dependencies': [
         'skia_lib.gyp:skia_lib',
         'tools.gyp:picture_utils',
-      ],
-    },
-    {
-      'target_name': 'test_image_decoder',
-      'type': 'executable',
-      'sources': [
-        '../tools/test_image_decoder.cpp',
-      ],
-      'dependencies': [
-        'skia_lib.gyp:skia_lib',
       ],
     },
   ],
@@ -495,3 +469,9 @@
     ],
   ],
 }
+
+# Local Variables:
+# tab-width:2
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=2 shiftwidth=2:

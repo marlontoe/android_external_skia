@@ -45,7 +45,7 @@ public:
             }
             index = this->nextIndex(index, round);
         }
-        SkASSERT(0); //  find: should be unreachable
+        SkASSERT(!"find: should be unreachable");
         return NULL;
     }
 
@@ -82,7 +82,7 @@ protected:
             }
             index = this->nextIndex(index, round);
         }
-        SkASSERT(0); // countCollisions: should be unreachable
+        SkASSERT(!"countCollisions: should be unreachable");
         return -1;
     }
 
@@ -92,7 +92,9 @@ private:
     static T* Deleted() { return reinterpret_cast<T*>(1); }  // Also an invalid pointer.
 
     static T** AllocArray(int capacity) {
-        return (T**)sk_calloc_throw(sizeof(T*) * capacity);  // All cells == Empty().
+        T** array = (T**)sk_malloc_throw(sizeof(T*) * capacity);
+        sk_bzero(array, sizeof(T*) * capacity);  // All cells == Empty().
+        return array;
     }
 
     void reset(int capacity) {
@@ -103,11 +105,11 @@ private:
     }
 
     bool validate() const {
-        #define SKTDYNAMICHASH_CHECK(x) SkASSERT((x)); if (!(x)) return false
+        #define CHECK(x) SkASSERT((x)); if (!(x)) return false
 
         // Is capacity sane?
-        SKTDYNAMICHASH_CHECK(SkIsPow2(fCapacity));
-        SKTDYNAMICHASH_CHECK(fCapacity >= kMinCapacity);
+        CHECK(SkIsPow2(fCapacity));
+        CHECK(fCapacity >= kMinCapacity);
 
         // Is fCount correct?
         int count = 0;
@@ -116,7 +118,7 @@ private:
                 count++;
             }
         }
-        SKTDYNAMICHASH_CHECK(count == fCount);
+        CHECK(count == fCount);
 
         // Is fDeleted correct?
         int deleted = 0;
@@ -125,14 +127,14 @@ private:
                 deleted++;
             }
         }
-        SKTDYNAMICHASH_CHECK(deleted == fDeleted);
+        CHECK(deleted == fDeleted);
 
         // Are all entries findable?
         for (int i = 0; i < fCapacity; i++) {
             if (Empty() == fArray[i] || Deleted() == fArray[i]) {
                 continue;
             }
-            SKTDYNAMICHASH_CHECK(NULL != this->find(GetKey(*fArray[i])));
+            CHECK(NULL != this->find(GetKey(*fArray[i])));
         }
 
         // Are all entries unique?
@@ -144,12 +146,12 @@ private:
                 if (Empty() == fArray[j] || Deleted() == fArray[j]) {
                     continue;
                 }
-                SKTDYNAMICHASH_CHECK(fArray[i] != fArray[j]);
-                SKTDYNAMICHASH_CHECK(!Equal(*fArray[i], GetKey(*fArray[j])));
-                SKTDYNAMICHASH_CHECK(!Equal(*fArray[j], GetKey(*fArray[i])));
+                CHECK(fArray[i] != fArray[j]);
+                CHECK(!Equal(*fArray[i], GetKey(*fArray[j])));
+                CHECK(!Equal(*fArray[j], GetKey(*fArray[i])));
             }
         }
-        #undef SKTDYNAMICHASH_CHECK
+        #undef CHECK
         return true;
     }
 
@@ -168,7 +170,7 @@ private:
             }
             index = this->nextIndex(index, round);
         }
-        SkASSERT(0); // add: should be unreachable
+        SkASSERT(!"add: should be unreachable");
     }
 
     void innerRemove(const Key& key) {
@@ -184,7 +186,7 @@ private:
             }
             index = this->nextIndex(index, round);
         }
-        SkASSERT(0); // innerRemove: should be unreachable
+        SkASSERT(!"innerRemove: should be unreachable");
     }
 
     void maybeGrow() {

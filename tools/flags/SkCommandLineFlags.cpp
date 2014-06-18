@@ -278,7 +278,7 @@ void SkCommandLineFlags::Parse(int argc, char** argv) {
                             flag->setDouble(atof(argv[i]));
                             break;
                         default:
-                            SkDEBUGFAIL("Invalid flag type");
+                            SkASSERT(!"Invalid flag type");
                     }
                     break;
                 }
@@ -304,10 +304,7 @@ void SkCommandLineFlags::Parse(int argc, char** argv) {
     }
 }
 
-namespace {
-
-template <typename Strings>
-bool ShouldSkipImpl(const Strings& strings, const char* name) {
+bool SkCommandLineFlags::ShouldSkip(const SkTDArray<const char*>& strings, const char* name) {
     int count = strings.count();
     size_t testLen = strlen(name);
     bool anyExclude = count == 0;
@@ -336,13 +333,4 @@ bool ShouldSkipImpl(const Strings& strings, const char* name) {
         }
     }
     return !anyExclude;
-}
-
-}  // namespace
-
-bool SkCommandLineFlags::ShouldSkip(const SkTDArray<const char*>& strings, const char* name) {
-    return ShouldSkipImpl(strings, name);
-}
-bool SkCommandLineFlags::ShouldSkip(const StringArray& strings, const char* name) {
-    return ShouldSkipImpl(strings, name);
 }

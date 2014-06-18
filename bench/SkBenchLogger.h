@@ -11,7 +11,6 @@
 
 #include "SkTypes.h"
 #include "SkString.h"
-#include <stdio.h>
 
 class SkFILEWStream;
 
@@ -64,10 +63,11 @@ public:
 private:
 #ifdef SK_BUILD_FOR_ANDROID
     void nativeLogError(const char msg[]) { SkDebugf("%s", msg); }
+    void nativeLogProgress(const char msg[]) { SkDebugf("%s", msg); }
 #else
     void nativeLogError(const char msg[]) { fprintf(stderr, "%s", msg); }
+    void nativeLogProgress(const char msg[]) { printf("%s", msg); }
 #endif
-    void nativeLogProgress(const char msg[]) { SkDebugf("%s", msg); }
 
     void fileWrite(const char msg[], size_t size);
 

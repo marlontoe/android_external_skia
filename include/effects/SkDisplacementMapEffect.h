@@ -25,8 +25,7 @@ public:
     SkDisplacementMapEffect(ChannelSelectorType xChannelSelector,
                             ChannelSelectorType yChannelSelector,
                             SkScalar scale, SkImageFilter* displacement,
-                            SkImageFilter* color = NULL,
-                            const CropRect* cropRect = NULL);
+                            SkImageFilter* color = NULL);
 
     ~SkDisplacementMapEffect();
 

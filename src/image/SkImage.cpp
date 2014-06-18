@@ -10,6 +10,8 @@
 #include "SkImagePriv.h"
 #include "SkImage_Base.h"
 
+SK_DEFINE_INST_COUNT(SkImage)
+
 static SkImage_Base* as_IB(SkImage* image) {
     return static_cast<SkImage_Base*>(image);
 }

@@ -35,12 +35,9 @@ static const SkColor gColors[] = {
     SK_ColorRED, SK_ColorGREEN, SK_ColorBLUE, SK_ColorWHITE, SK_ColorBLACK, // 10 lines, 50 colors
 };
 
-// We have several special-cases depending on the number (and spacing) of colors, so
-// try to exercise those here.
 static const GradData gGradData[] = {
     { 2, gColors, NULL, "" },
     { 50, gColors, NULL, "_hicolor" }, // many color gradient
-    { 3, gColors, NULL, "_3color" },
 };
 
 /// Ignores scale
@@ -109,12 +106,13 @@ typedef SkShader* (*GradMaker)(const SkPoint pts[2], const GradData& data,
 static const struct {
     GradMaker   fMaker;
     const char* fName;
+    int         fRepeat;
 } gGrads[] = {
-    { MakeLinear,   "linear"  },
-    { MakeRadial,   "radial1" },
-    { MakeSweep,    "sweep"   },
-    { Make2Radial,  "radial2" },
-    { MakeConical,  "conical" },
+    { MakeLinear,   "linear",  15 },
+    { MakeRadial,   "radial1", 10 },
+    { MakeSweep,    "sweep",    1 },
+    { Make2Radial,  "radial2",  5 },
+    { MakeConical,  "conical",  5 },
 };
 
 enum GradType { // these must match the order in gGrads
@@ -139,7 +137,7 @@ static const char* tilemodename(SkShader::TileMode tm) {
         case SkShader::kMirror_TileMode:
             return "mirror";
         default:
-            SkDEBUGFAIL("unknown tilemode");
+            SkASSERT(!"unknown tilemode");
             return "error";
     }
 }
@@ -151,7 +149,7 @@ static const char* geomtypename(GeomType gt) {
         case kOval_GeomType:
             return "oval";
         default:
-            SkDEBUGFAIL("unknown geometry type");
+            SkASSERT(!"unknown geometry type");
             return "error";
     }
 }
@@ -161,26 +159,25 @@ static const char* geomtypename(GeomType gt) {
 class GradientBench : public SkBenchmark {
     SkString fName;
     SkShader* fShader;
+    int      fCount;
     enum {
         W   = 400,
         H   = 400,
-        kRepeat = 15,
+        N   = 1
     };
 public:
-    GradientBench(GradType gradType,
+    GradientBench(void* param, GradType gradType,
                   GradData data = gGradData[0],
                   SkShader::TileMode tm = SkShader::kClamp_TileMode,
                   GeomType geomType = kRect_GeomType,
-                  float scale = 1.0f) {
+                  float scale = 1.0f
+        )
+        : INHERITED(param) {
         fName.printf("gradient_%s_%s", gGrads[gradType].fName,
                      tilemodename(tm));
         if (geomType != kRect_GeomType) {
             fName.append("_");
             fName.append(geomtypename(geomType));
-        }
-
-        if (scale != 1.f) {
-            fName.appendf("_scale_%g", scale);
         }
 
         fName.append(data.fName);
@@ -190,6 +187,7 @@ public:
             { SkIntToScalar(W), SkIntToScalar(H) }
         };
 
+        fCount = SkBENCHLOOP(N * gGrads[gradType].fRepeat);
         fShader = gGrads[gradType].fMaker(pts, data, tm, NULL, scale);
         fGeomType = geomType;
     }
@@ -203,14 +201,14 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
         SkPaint paint;
         this->setupPaint(&paint);
 
         paint.setShader(fShader);
 
         SkRect r = { 0, 0, SkIntToScalar(W), SkIntToScalar(H) };
-        for (int i = 0; i < loops * kRepeat; i++) {
+        for (int i = 0; i < fCount; i++) {
             switch (fGeomType) {
                case kRect_GeomType:
                    canvas->drawRect(r, paint);
@@ -228,42 +226,12 @@ private:
     GeomType fGeomType;
 };
 
-DEF_BENCH( return new GradientBench(kLinear_GradType); )
-DEF_BENCH( return new GradientBench(kLinear_GradType, gGradData[1]); )
-DEF_BENCH( return new GradientBench(kLinear_GradType, gGradData[2]); )
-DEF_BENCH( return new GradientBench(kLinear_GradType, gGradData[0], SkShader::kMirror_TileMode); )
-
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[0]); )
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[1]); )
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[2]); )
-// Draw a radial gradient of radius 1/2 on a rectangle; half the lines should
-// be completely pinned, the other half should pe partially pinned
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[0], SkShader::kClamp_TileMode, kRect_GeomType, 0.5f); )
-
-// Draw a radial gradient on a circle of equal size; all the lines should
-// hit the unpinned fast path (so long as GradientBench.W == H)
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[0], SkShader::kClamp_TileMode, kOval_GeomType); )
-
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[0], SkShader::kMirror_TileMode); )
-DEF_BENCH( return new GradientBench(kRadial_GradType, gGradData[0], SkShader::kRepeat_TileMode); )
-DEF_BENCH( return new GradientBench(kSweep_GradType); )
-DEF_BENCH( return new GradientBench(kSweep_GradType, gGradData[1]); )
-DEF_BENCH( return new GradientBench(kSweep_GradType, gGradData[2]); )
-DEF_BENCH( return new GradientBench(kRadial2_GradType); )
-DEF_BENCH( return new GradientBench(kRadial2_GradType, gGradData[1]); )
-DEF_BENCH( return new GradientBench(kRadial2_GradType, gGradData[0], SkShader::kMirror_TileMode); )
-DEF_BENCH( return new GradientBench(kConical_GradType); )
-DEF_BENCH( return new GradientBench(kConical_GradType, gGradData[1]); )
-DEF_BENCH( return new GradientBench(kConical_GradType, gGradData[2]); )
-
-///////////////////////////////////////////////////////////////////////////////
-
 class Gradient2Bench : public SkBenchmark {
     SkString fName;
     bool     fHasAlpha;
 
 public:
-    Gradient2Bench(bool hasAlpha)  {
+    Gradient2Bench(void* param, bool hasAlpha) : INHERITED(param) {
         fName.printf("gradient_create_%s", hasAlpha ? "alpha" : "opaque");
         fHasAlpha = hasAlpha;
     }
@@ -273,7 +241,7 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
         SkPaint paint;
         this->setupPaint(&paint);
 
@@ -283,7 +251,7 @@ protected:
             { SkIntToScalar(100), SkIntToScalar(100) },
         };
 
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < SkBENCHLOOP(1000); i++) {
             const int gray = i % 256;
             const int alpha = fHasAlpha ? gray : 0xFF;
             SkColor colors[] = {
@@ -302,5 +270,26 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
-DEF_BENCH( return new Gradient2Bench(false); )
-DEF_BENCH( return new Gradient2Bench(true); )
+DEF_BENCH( return new GradientBench(p, kLinear_GradType); )
+DEF_BENCH( return new GradientBench(p, kLinear_GradType, gGradData[1]); )
+DEF_BENCH( return new GradientBench(p, kLinear_GradType, gGradData[0], SkShader::kMirror_TileMode); )
+
+// Draw a radial gradient of radius 1/2 on a rectangle; half the lines should
+// be completely pinned, the other half should pe partially pinned
+DEF_BENCH( return new GradientBench(p, kRadial_GradType, gGradData[0], SkShader::kClamp_TileMode, kRect_GeomType, 0.5f); )
+
+// Draw a radial gradient on a circle of equal size; all the lines should
+// hit the unpinned fast path (so long as GradientBench.W == H)
+DEF_BENCH( return new GradientBench(p, kRadial_GradType, gGradData[0], SkShader::kClamp_TileMode, kOval_GeomType); )
+
+DEF_BENCH( return new GradientBench(p, kRadial_GradType, gGradData[0], SkShader::kMirror_TileMode); )
+DEF_BENCH( return new GradientBench(p, kSweep_GradType); )
+DEF_BENCH( return new GradientBench(p, kSweep_GradType, gGradData[1]); )
+DEF_BENCH( return new GradientBench(p, kRadial2_GradType); )
+DEF_BENCH( return new GradientBench(p, kRadial2_GradType, gGradData[1]); )
+DEF_BENCH( return new GradientBench(p, kRadial2_GradType, gGradData[0], SkShader::kMirror_TileMode); )
+DEF_BENCH( return new GradientBench(p, kConical_GradType); )
+DEF_BENCH( return new GradientBench(p, kConical_GradType, gGradData[1]); )
+
+DEF_BENCH( return new Gradient2Bench(p, false); )
+DEF_BENCH( return new Gradient2Bench(p, true); )

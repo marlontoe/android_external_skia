@@ -9,18 +9,14 @@
 #include "PathOpsThreadedCommon.h"
 #include "SkBitmap.h"
 #include "SkCanvas.h"
-#include "SkForceLinking.h"
 #include "SkMatrix.h"
 #include "SkPaint.h"
-#include "SkRTConf.h"
 #include "SkStream.h"
 #include "SkThreadPool.h"
 
 #ifdef SK_BUILD_FOR_MAC
 #include <sys/sysctl.h>
 #endif
-
-__SK_FORCE_IMAGE_DECODER_LINKING;
 
 static const char marker[] =
     "</div>\n"
@@ -448,9 +444,8 @@ static int comparePaths(skiatest::Reporter* reporter, const SkPath& one, const S
     return errors2x2 > MAX_ERRORS ? errors2x2 : 0;
 }
 
-// Default values for when reporter->verbose() is false.
-static int testNumber = 1;
-static const char* testName = "pathOpTest";
+static int testNumber;
+static const char* testName;
 
 static void writeTestName(const char* nameSuffix, SkMemoryWStream& outFile) {
     outFile.writeText(testName);
@@ -559,12 +554,11 @@ bool testSimplify(skiatest::Reporter* reporter, const SkPath& path) {
 }
 
 #if DEBUG_SHOW_TEST_NAME
-void SkPathOpsDebug::ShowPath(const SkPath& a, const SkPath& b, SkPathOp shapeOp,
-        const char* testName) {
-    ShowFunctionHeader(testName);
-    showPath(a, "path", true);
-    showPath(b, "pathB", true);
-    ShowOp(shapeOp, "path", "pathB");
+void DebugShowPath(const SkPath& a, const SkPath& b, SkPathOp shapeOp, const char* testName) {
+        ShowFunctionHeader(testName);
+        showPath(a, "path", true);
+        showPath(b, "pathB", true);
+        ShowOp(shapeOp, "path", "pathB");
 }
 #endif
 
@@ -577,7 +571,7 @@ static bool innerPathOp(skiatest::Reporter* reporter, const SkPath& a, const SkP
         showOp(shapeOp);
         showPathData(b);
     } else {
-        SkPathOpsDebug::ShowPath(a, b, shapeOp, testName);
+        DebugShowPath(a, b, shapeOp, testName);
     }
 #endif
     SkPath out;
@@ -632,34 +626,25 @@ bool testThreadedPathOp(skiatest::Reporter* reporter, const SkPath& a, const SkP
     return innerPathOp(reporter, a, b, shapeOp, testName, true);
 }
 
-SK_DECLARE_STATIC_MUTEX(gMutex);
-
 int initializeTests(skiatest::Reporter* reporter, const char* test) {
-#if 0  // doesn't work yet
-    SK_CONF_SET("images.jpeg.suppressDecoderWarnings", true);
-    SK_CONF_SET("images.png.suppressDecoderWarnings", true);
-#endif
 #ifdef SK_DEBUG
-    SkPathOpsDebug::gMaxWindSum = 4;
-    SkPathOpsDebug::gMaxWindValue = 4;
+    gDebugMaxWindSum = 4;
+    gDebugMaxWindValue = 4;
 #endif
-    if (reporter->verbose()) {
-        SkAutoMutexAcquire lock(gMutex);
-        testName = test;
-        size_t testNameSize = strlen(test);
-        SkFILEStream inFile("../../experimental/Intersection/op.htm");
-        if (inFile.isValid()) {
-            SkTDArray<char> inData;
-            inData.setCount(inFile.getLength());
-            size_t inLen = inData.count();
-            inFile.read(inData.begin(), inLen);
-            inFile.setPath(NULL);
-            char* insert = strstr(inData.begin(), marker);
-            if (insert) {
-                insert += sizeof(marker) - 1;
-                const char* numLoc = insert + 4 /* indent spaces */ + testNameSize - 1;
-                testNumber = atoi(numLoc) + 1;
-            }
+    testName = test;
+    size_t testNameSize = strlen(test);
+    SkFILEStream inFile("../../experimental/Intersection/op.htm");
+    if (inFile.isValid()) {
+        SkTDArray<char> inData;
+        inData.setCount(inFile.getLength());
+        size_t inLen = inData.count();
+        inFile.read(inData.begin(), inLen);
+        inFile.setPath(NULL);
+        char* insert = strstr(inData.begin(), marker);
+        if (insert) {
+            insert += sizeof(marker) - 1;
+            const char* numLoc = insert + 4 /* indent spaces */ + testNameSize - 1;
+            testNumber = atoi(numLoc) + 1;
         }
     }
     return reporter->allowThreaded() ? SkThreadPool::kThreadPerCore : 1;

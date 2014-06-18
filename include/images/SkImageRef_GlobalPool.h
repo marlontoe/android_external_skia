@@ -15,8 +15,7 @@
 class SkImageRef_GlobalPool : public SkImageRef {
 public:
     // if pool is null, use the global pool
-    SkImageRef_GlobalPool(const SkImageInfo&, SkStreamRewindable*,
-                          int sampleSize = 1);
+    SkImageRef_GlobalPool(SkStream*, SkBitmap::Config, int sampleSize = 1);
     virtual ~SkImageRef_GlobalPool();
 
     SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkImageRef_GlobalPool)
@@ -47,7 +46,7 @@ public:
     static void DumpPool();
 
 protected:
-    virtual bool onDecode(SkImageDecoder* codec, SkStreamRewindable* stream,
+    virtual bool onDecode(SkImageDecoder* codec, SkStream* stream,
                           SkBitmap* bitmap, SkBitmap::Config config,
                           SkImageDecoder::Mode mode);
 

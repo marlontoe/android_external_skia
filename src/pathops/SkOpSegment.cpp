@@ -32,36 +32,36 @@ static const bool gActiveEdge[kXOR_PathOp + 1][2][2][2][2] = {
 #undef F
 #undef T
 
-enum {
-    kOutsideTrackedTCount = 16,  // FIXME: determine what this should be
-    kMissingSpanCount = 4,  // FIXME: determine what this should be
-};
+enum { kOutsideTrackedTCount = 16 }; // FIXME: determine what this should be
 
-// note that this follows the same logic flow as build angles
+// OPTIMIZATION: does the following also work, and is it any faster?
+// return outerWinding * innerWinding > 0
+//      || ((outerWinding + innerWinding < 0) ^ ((outerWinding - innerWinding) < 0)))
+bool SkOpSegment::UseInnerWinding(int outerWinding, int innerWinding) {
+    SkASSERT(outerWinding != SK_MaxS32);
+    SkASSERT(innerWinding != SK_MaxS32);
+    int absOut = abs(outerWinding);
+    int absIn = abs(innerWinding);
+    bool result = absOut == absIn ? outerWinding < 0 : absOut < absIn;
+    return result;
+}
+
 bool SkOpSegment::activeAngle(int index, int* done, SkTArray<SkOpAngle, true>* angles) {
     if (activeAngleInner(index, done, angles)) {
         return true;
     }
-    double referenceT = fTs[index].fT;
     int lesser = index;
-    while (--lesser >= 0
-            && (precisely_negative(referenceT - fTs[lesser].fT) || fTs[lesser].fTiny)) {
+    while (--lesser >= 0 && equalPoints(index, lesser)) {
         if (activeAngleOther(lesser, done, angles)) {
             return true;
         }
     }
+    lesser = index;
     do {
         if (activeAngleOther(index, done, angles)) {
             return true;
         }
-        if (++index == fTs.count()) {
-            break;
-        }
-        if (fTs[index - 1].fTiny) {
-            referenceT = fTs[index].fT;
-            continue;
-        }
-    } while (precisely_negative(fTs[index].fT - referenceT));
+    } while (++index < fTs.count() && equalPoints(index, lesser));
     return false;
 }
 
@@ -187,7 +187,7 @@ bool SkOpSegment::activeOp(int xorMiMask, int xorSuMask, int index, int endIndex
     bool result = gActiveEdge[op][miFrom][miTo][suFrom][suTo];
 #if DEBUG_ACTIVE_OP
     SkDebugf("%s op=%s miFrom=%d miTo=%d suFrom=%d suTo=%d result=%d\n", __FUNCTION__,
-            SkPathOpsDebug::kPathOpStr[op], miFrom, miTo, suFrom, suTo, result);
+            kPathOpStr[op], miFrom, miTo, suFrom, suTo, result);
 #endif
     return result;
 }
@@ -209,35 +209,47 @@ bool SkOpSegment::activeWinding(int index, int endIndex, int* maxWinding, int* s
 void SkOpSegment::addAngle(SkTArray<SkOpAngle, true>* anglesPtr, int start, int end) const {
     SkASSERT(start != end);
     SkOpAngle& angle = anglesPtr->push_back();
+#if 0 && DEBUG_ANGLE // computed pt and actual pt may differ by more than approx eq
+    SkTArray<SkOpAngle, true>& angles = *anglesPtr;
+    if (angles.count() > 1) {
+        const SkOpSegment* aSeg = angles[0].segment();
+        int aStart = angles[0].start();
+        if (!aSeg->fTs[aStart].fTiny) {
+            const SkPoint& angle0Pt = aSeg->xyAtT(aStart);
+            SkDPoint newPt = (*CurveDPointAtT[SkPathOpsVerbToPoints(aSeg->fVerb)])(aSeg->fPts,
+                    aSeg->fTs[aStart].fT);
+#if ONE_OFF_DEBUG
+            SkDebugf("%s t1=%1.9g (%1.9g, %1.9g) (%1.9g, %1.9g)\n", __FUNCTION__,
+                    aSeg->fTs[aStart].fT, newPt.fX, newPt.fY, angle0Pt.fX, angle0Pt.fY);
+#endif
+            SkASSERT(newPt.approximatelyEqual(angle0Pt));
+        }
+    }
+#endif
     angle.set(this, start, end);
 }
 
-void SkOpSegment::addCancelOutsides(const SkPoint& startPt, const SkPoint& endPt,
-        SkOpSegment* other) {
+void SkOpSegment::addCancelOutsides(double tStart, double oStart, SkOpSegment* other, double oEnd) {
     int tIndex = -1;
     int tCount = fTs.count();
     int oIndex = -1;
     int oCount = other->fTs.count();
     do {
         ++tIndex;
-    } while (startPt != fTs[tIndex].fPt && tIndex < tCount);
+    } while (!approximately_negative(tStart - fTs[tIndex].fT) && tIndex < tCount);
     int tIndexStart = tIndex;
     do {
         ++oIndex;
-    } while (endPt != other->fTs[oIndex].fPt && oIndex < oCount);
+    } while (!approximately_negative(oStart - other->fTs[oIndex].fT) && oIndex < oCount);
     int oIndexStart = oIndex;
-    const SkPoint* nextPt;
+    double nextT;
     do {
-        nextPt = &fTs[++tIndex].fPt;
-        SkASSERT(fTs[tIndex].fT < 1 || startPt != *nextPt);
-    } while (startPt == *nextPt);
-    double nextT = fTs[tIndex].fT;
-    const SkPoint* oNextPt;
+        nextT = fTs[++tIndex].fT;
+    } while (nextT < 1 && approximately_negative(nextT - tStart));
+    double oNextT;
     do {
-        oNextPt = &other->fTs[++oIndex].fPt;
-        SkASSERT(other->fTs[oIndex].fT < 1 || endPt != *oNextPt);
-    } while (endPt == *oNextPt);
-    double oNextT = other->fTs[oIndex].fT;
+        oNextT = other->fTs[++oIndex].fT;
+    } while (oNextT < 1 && approximately_negative(oNextT - oStart));
     // at this point, spans before and after are at:
     //  fTs[tIndexStart - 1], fTs[tIndexStart], fTs[tIndex]
     // if tIndexStart == 0, no prior span
@@ -289,39 +301,43 @@ void SkOpSegment::addCancelOutsides(const SkPoint& startPt, const SkPoint& endPt
     }
 }
 
-void SkOpSegment::addCoinOutsides(const SkPoint& startPt, const SkPoint& endPt,
-        SkOpSegment* other) {
-    // walk this to startPt
-    // walk other to startPt
+void SkOpSegment::addCoinOutsides(const SkTArray<double, true>& outsideTs, SkOpSegment* other,
+                                  double oEnd) {
+    // walk this to outsideTs[0]
+    // walk other to outsideTs[1]
     // if either is > 0, add a pointer to the other, copying adjacent winding
     int tIndex = -1;
     int oIndex = -1;
+    double tStart = outsideTs[0];
+    double oStart = outsideTs[1];
     do {
         ++tIndex;
-    } while (startPt != fTs[tIndex].fPt);
+    } while (!approximately_negative(tStart - fTs[tIndex].fT));
+    SkPoint ptStart = fTs[tIndex].fPt;
     do {
         ++oIndex;
-    } while (startPt != other->fTs[oIndex].fPt);
+    } while (!approximately_negative(oStart - other->fTs[oIndex].fT));
     if (tIndex > 0 || oIndex > 0 || fOperand != other->fOperand) {
-        addTPair(fTs[tIndex].fT, other, other->fTs[oIndex].fT, false, startPt);
+        addTPair(tStart, other, oStart, false, ptStart);
     }
-    SkPoint nextPt = startPt;
+    tStart = fTs[tIndex].fT;
+    oStart = other->fTs[oIndex].fT;
     do {
-        const SkPoint* workPt;
+        double nextT;
         do {
-            workPt = &fTs[++tIndex].fPt;
-        } while (nextPt == *workPt);
+            nextT = fTs[++tIndex].fT;
+        } while (approximately_negative(nextT - tStart));
+        tStart = nextT;
+        ptStart = fTs[tIndex].fPt;
         do {
-            workPt = &other->fTs[++oIndex].fPt;
-        } while (nextPt == *workPt);
-        nextPt = *workPt;
-        double tStart = fTs[tIndex].fT;
-        double oStart = other->fTs[oIndex].fT;
+            nextT = other->fTs[++oIndex].fT;
+        } while (approximately_negative(nextT - oStart));
+        oStart = nextT;
         if (tStart == 1 && oStart == 1 && fOperand == other->fOperand) {
             break;
         }
-        addTPair(tStart, other, oStart, false, nextPt);
-    } while (endPt != nextPt);
+        addTPair(tStart, other, oStart, false, ptStart);
+    } while (tStart < 1 && oStart < 1 && !approximately_negative(oEnd - oStart));
 }
 
 void SkOpSegment::addCubic(const SkPoint pts[4], bool operand, bool evenOdd) {
@@ -417,8 +433,6 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
     //  binary search?
     int insertedAt = -1;
     size_t tCount = fTs.count();
-    const SkPoint& firstPt = fPts[0];
-    const SkPoint& lastPt = fPts[SkPathOpsVerbToPoints(fVerb)];
     for (size_t index = 0; index < tCount; ++index) {
         // OPTIMIZATION: if there are three or more identical Ts, then
         // the fourth and following could be further insertion-sorted so
@@ -426,20 +440,9 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
         // This could later limit segment tests to the two adjacent
         // neighbors, although it doesn't help with determining which
         // circular direction to go in.
-        const SkOpSpan& span = fTs[index];
-        if (newT < span.fT) {
+        if (newT < fTs[index].fT) {
             insertedAt = index;
             break;
-        }
-        if (newT == span.fT) {
-            if (pt == span.fPt) {
-                insertedAt = index;
-                break;
-            }
-            if ((pt == firstPt && newT == 0) || (span.fPt == lastPt && newT == 1)) {
-                insertedAt = index;
-                break;
-            }
         }
     }
     SkOpSpan* span;
@@ -461,7 +464,6 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
     span->fOppSum = SK_MinS32;
     span->fWindValue = 1;
     span->fOppValue = 0;
-    span->fSmall = false;
     span->fTiny = false;
     span->fLoop = false;
     if ((span->fDone = newT == 1)) {
@@ -470,7 +472,7 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
     span->fUnsortableStart = false;
     span->fUnsortableEnd = false;
     int less = -1;
-    while (&span[less + 1] - fTs.begin() > 0 && AlmostEqualUlps(span[less].fPt, span->fPt)) {
+    while (&span[less + 1] - fTs.begin() > 0 && xyAtT(&span[less]) == xyAtT(span)) {
         if (span[less].fDone) {
             break;
         }
@@ -485,11 +487,9 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
                 break;
             }
         }
-        span[less].fSmall = true;
-        bool tiny = span[less].fPt == span->fPt;
-        span[less].fTiny = tiny;
+        span[less].fTiny = true;
         span[less].fDone = true;
-        if (approximately_negative(newT - span[less].fT) && tiny) {
+        if (approximately_negative(newT - span[less].fT)) {
             if (approximately_greater_than_one(newT)) {
                 SkASSERT(&span[less] - fTs.begin() < fTs.count());
                 span[less].fUnsortableStart = true;
@@ -508,16 +508,12 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
         --less;
     }
     int more = 1;
-    while (fTs.end() - &span[more - 1] > 1 && AlmostEqualUlps(span[more].fPt, span->fPt)) {
+    while (fTs.end() - &span[more - 1] > 1 && xyAtT(&span[more]) == xyAtT(span)) {
         if (span[more - 1].fDone) {
             break;
         }
         double tEndInterval = span[more].fT - newT;
         if (precisely_negative(tEndInterval)) {
-            if ((span->fTiny = span[more].fTiny)) {
-                span->fDone = true;
-                ++fDoneSpans;
-            }
             break;
         }
         if (fVerb == SkPath::kCubic_Verb) {
@@ -527,11 +523,9 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
                 break;
             }
         }
-        span[more - 1].fSmall = true;
-        bool tiny = span[more].fPt == span->fPt;
-        span[more - 1].fTiny = tiny;
+        span[more - 1].fTiny = true;
         span[more - 1].fDone = true;
-        if (approximately_negative(span[more].fT - newT) && tiny) {
+        if (approximately_negative(span[more].fT - newT)) {
             if (approximately_greater_than_one(span[more].fT)) {
                 span[more + 1].fUnsortableStart = true;
                 span[more].fUnsortableEnd = true;
@@ -559,138 +553,148 @@ int SkOpSegment::addT(SkOpSegment* other, const SkPoint& pt, double newT) {
 // FIXME? It seems that decrementing by one will fail for complex paths that
 // have three or more coincident edges. Shouldn't this subtract the difference
 // between the winding values?
-/*                                      |-->                           |-->
-this     0>>>>1>>>>2>>>>3>>>4      0>>>>1>>>>2>>>>3>>>4      0>>>>1>>>>2>>>>3>>>4
-other         2<<<<1<<<<0               2<<<<1<<<<0               2<<<<1<<<<0
-              ^         ^                 <--|                           <--|
-           startPt    endPt        test/oTest first pos      test/oTest final pos
-*/
-void SkOpSegment::addTCancel(const SkPoint& startPt, const SkPoint& endPt, SkOpSegment* other) {
+void SkOpSegment::addTCancel(double startT, double endT, SkOpSegment* other,
+        double oStartT, double oEndT) {
+    SkASSERT(!approximately_negative(endT - startT));
+    SkASSERT(!approximately_negative(oEndT - oStartT));
     bool binary = fOperand != other->fOperand;
     int index = 0;
-    while (startPt != fTs[index].fPt) {
-        SkASSERT(index < fTs.count());
+    while (!approximately_negative(startT - fTs[index].fT)) {
         ++index;
     }
-    while (index > 0 && fTs[index].fT == fTs[index - 1].fT) {
-        --index;
-    }
     int oIndex = other->fTs.count();
-    while (startPt != other->fTs[--oIndex].fPt) {  // look for startPt match
-        SkASSERT(oIndex > 0);
-    }
-    double oStartT = other->fTs[oIndex].fT;
-    // look for first point beyond match
-    while (startPt == other->fTs[--oIndex].fPt || oStartT == other->fTs[oIndex].fT) {
-        SkASSERT(oIndex > 0);
-    }
+    while (approximately_positive(other->fTs[--oIndex].fT - oEndT))
+        ;
+    double tRatio = (oEndT - oStartT) / (endT - startT);
     SkOpSpan* test = &fTs[index];
     SkOpSpan* oTest = &other->fTs[oIndex];
-    SkSTArray<kOutsideTrackedTCount, SkPoint, true> outsidePts;
-    SkSTArray<kOutsideTrackedTCount, SkPoint, true> oOutsidePts;
+    SkSTArray<kOutsideTrackedTCount, double, true> outsideTs;
+    SkSTArray<kOutsideTrackedTCount, double, true> oOutsideTs;
     do {
-        SkASSERT(test->fT < 1);
-        SkASSERT(oTest->fT < 1);
         bool decrement = test->fWindValue && oTest->fWindValue;
         bool track = test->fWindValue || oTest->fWindValue;
         bool bigger = test->fWindValue >= oTest->fWindValue;
-        const SkPoint& testPt = test->fPt;
         double testT = test->fT;
-        const SkPoint& oTestPt = oTest->fPt;
         double oTestT = oTest->fT;
+        SkOpSpan* span = test;
         do {
             if (decrement) {
                 if (binary && bigger) {
-                    test->fOppValue--;
+                    span->fOppValue--;
                 } else {
-                    decrementSpan(test);
+                    decrementSpan(span);
                 }
-            } else if (track) {
-                TrackOutsidePair(&outsidePts, testPt, oTestPt);
+            } else if (track && span->fT < 1 && oTestT < 1) {
+                TrackOutside(&outsideTs, span->fT, oTestT);
             }
-            SkASSERT(index < fTs.count() - 1);
-            test = &fTs[++index];
-        } while (testPt == test->fPt || testT == test->fT);
-        SkDEBUGCODE(int originalWindValue = oTest->fWindValue);
-        do {
-            SkASSERT(oTest->fT < 1);
-            SkASSERT(originalWindValue == oTest->fWindValue);
+            span = &fTs[++index];
+        } while (approximately_negative(span->fT - testT));
+        SkOpSpan* oSpan = oTest;
+        double otherTMatchStart = oEndT - (span->fT - startT) * tRatio;
+        double otherTMatchEnd = oEndT - (test->fT - startT) * tRatio;
+        SkDEBUGCODE(int originalWindValue = oSpan->fWindValue);
+        while (approximately_negative(otherTMatchStart - oSpan->fT)
+                && !approximately_negative(otherTMatchEnd - oSpan->fT)) {
+    #ifdef SK_DEBUG
+            SkASSERT(originalWindValue == oSpan->fWindValue);
+    #endif
             if (decrement) {
                 if (binary && !bigger) {
-                    oTest->fOppValue--;
+                    oSpan->fOppValue--;
                 } else {
-                    other->decrementSpan(oTest);
+                    other->decrementSpan(oSpan);
                 }
-            } else if (track) {
-                TrackOutsidePair(&oOutsidePts, oTestPt, testPt);
+            } else if (track && oSpan->fT < 1 && testT < 1) {
+                TrackOutside(&oOutsideTs, oSpan->fT, testT);
             }
             if (!oIndex) {
                 break;
             }
-            oTest = &other->fTs[--oIndex];
-        } while (oTestPt == oTest->fPt || oTestT == oTest->fT);
-    } while (endPt != test->fPt && test->fT < 1);
+            oSpan = &other->fTs[--oIndex];
+        }
+        test = span;
+        oTest = oSpan;
+    } while (!approximately_negative(endT - test->fT));
+    SkASSERT(!oIndex || approximately_negative(oTest->fT - oStartT));
     // FIXME: determine if canceled edges need outside ts added
-    int outCount = outsidePts.count();
-    if (!done() && outCount) {
-        addCancelOutsides(outsidePts[0], outsidePts[1], other);
-        if (outCount > 2) {
-            addCancelOutsides(outsidePts[outCount - 2], outsidePts[outCount - 1], other);
+    if (!done() && outsideTs.count()) {
+        double tStart = outsideTs[0];
+        double oStart = outsideTs[1];
+        addCancelOutsides(tStart, oStart, other, oEndT);
+        int count = outsideTs.count();
+        if (count > 2) {
+            double tStart = outsideTs[count - 2];
+            double oStart = outsideTs[count - 1];
+            addCancelOutsides(tStart, oStart, other, oEndT);
         }
     }
-    if (!other->done() && oOutsidePts.count()) {
-        other->addCancelOutsides(oOutsidePts[0], oOutsidePts[1], this);
+    if (!other->done() && oOutsideTs.count()) {
+        double tStart = oOutsideTs[0];
+        double oStart = oOutsideTs[1];
+        other->addCancelOutsides(tStart, oStart, this, endT);
     }
 }
 
 int SkOpSegment::addSelfT(SkOpSegment* other, const SkPoint& pt, double newT) {
-    // if the tail nearly intersects itself but not quite, the caller records this separately
     int result = addT(other, pt, newT);
     SkOpSpan* span = &fTs[result];
     span->fLoop = true;
     return result;
 }
 
-void SkOpSegment::bumpCoincidentThis(const SkOpSpan& oTest, bool binary, int* indexPtr,
-        SkTArray<SkPoint, true>* outsideTs) {
-    int index = *indexPtr;
+int SkOpSegment::addUnsortableT(SkOpSegment* other, bool start, const SkPoint& pt, double newT) {
+    int result = addT(other, pt, newT);
+    SkOpSpan* span = &fTs[result];
+    if (start) {
+        if (result > 0) {
+            span[result - 1].fUnsortableEnd = true;
+        }
+        span[result].fUnsortableStart = true;
+    } else {
+        span[result].fUnsortableEnd = true;
+        if (result + 1 < fTs.count()) {
+            span[result + 1].fUnsortableStart = true;
+        }
+    }
+    return result;
+}
+
+int SkOpSegment::bumpCoincidentThis(const SkOpSpan& oTest, bool opp, int index,
+        SkTArray<double, true>* outsideTs) {
     int oWindValue = oTest.fWindValue;
     int oOppValue = oTest.fOppValue;
-    if (binary) {
+    if (opp) {
         SkTSwap<int>(oWindValue, oOppValue);
     }
     SkOpSpan* const test = &fTs[index];
     SkOpSpan* end = test;
-    const SkPoint& oStartPt = oTest.fPt;
+    const double oStartT = oTest.fT;
     do {
         if (bumpSpan(end, oWindValue, oOppValue)) {
-            TrackOutside(outsideTs, oStartPt);
+            TrackOutside(outsideTs, end->fT, oStartT);
         }
         end = &fTs[++index];
-    } while ((end->fPt == test->fPt || end->fT == test->fT) && end->fT < 1);
-    *indexPtr = index;
+    } while (approximately_negative(end->fT - test->fT));
+    return index;
 }
 
 // because of the order in which coincidences are resolved, this and other
 // may not have the same intermediate points. Compute the corresponding
 // intermediate T values (using this as the master, other as the follower)
 // and walk other conditionally -- hoping that it catches up in the end
-void SkOpSegment::bumpCoincidentOther(const SkOpSpan& test, int* oIndexPtr,
-        SkTArray<SkPoint, true>* oOutsidePts) {
-    int oIndex = *oIndexPtr;
+int SkOpSegment::bumpCoincidentOther(const SkOpSpan& test, double oEndT, int& oIndex,
+        SkTArray<double, true>* oOutsideTs) {
     SkOpSpan* const oTest = &fTs[oIndex];
     SkOpSpan* oEnd = oTest;
-    const SkPoint& startPt = test.fPt;
-    const SkPoint& oStartPt = oTest->fPt;
-    double oStartT = oTest->fT;
-    if (oStartPt == oEnd->fPt || oStartT == oEnd->fT) {
-        TrackOutside(oOutsidePts, startPt);
-    }
-    while (oStartPt == oEnd->fPt || oStartT == oEnd->fT) {
+    const double startT = test.fT;
+    const double oStartT = oTest->fT;
+    while (!approximately_negative(oEndT - oEnd->fT)
+            && approximately_negative(oEnd->fT - oStartT)) {
         zeroSpan(oEnd);
+        TrackOutside(oOutsideTs, oEnd->fT, startT);
         oEnd = &fTs[++oIndex];
     }
-    *oIndexPtr = oIndex;
+    return oIndex;
 }
 
 // FIXME: need to test this case:
@@ -702,102 +706,43 @@ void SkOpSegment::bumpCoincidentOther(const SkOpSpan& test, int* oIndexPtr,
 
 // set spans from start to end to increment the greater by one and decrement
 // the lesser
-void SkOpSegment::addTCoincident(const SkPoint& startPt, const SkPoint& endPt, double endT,
-        SkOpSegment* other) {
-    bool binary = fOperand != other->fOperand;
+void SkOpSegment::addTCoincident(double startT, double endT, SkOpSegment* other, double oStartT,
+                                 double oEndT) {
+    SkASSERT(!approximately_negative(endT - startT));
+    SkASSERT(!approximately_negative(oEndT - oStartT));
+    bool opp = fOperand ^ other->fOperand;
     int index = 0;
-    while (startPt != fTs[index].fPt) {
-        SkASSERT(index < fTs.count());
+    while (!approximately_negative(startT - fTs[index].fT)) {
         ++index;
     }
-    double startT = fTs[index].fT;
-    while (index > 0 && fTs[index - 1].fT == startT) {
-        --index;
-    }
     int oIndex = 0;
-    while (startPt != other->fTs[oIndex].fPt) {
-        SkASSERT(oIndex < other->fTs.count());
+    while (!approximately_negative(oStartT - other->fTs[oIndex].fT)) {
         ++oIndex;
     }
-    double oStartT = other->fTs[oIndex].fT;
-    while (oIndex > 0 && other->fTs[oIndex - 1].fT == oStartT) {
-        --oIndex;
-    }
-    SkSTArray<kOutsideTrackedTCount, SkPoint, true> outsidePts;
-    SkSTArray<kOutsideTrackedTCount, SkPoint, true> oOutsidePts;
     SkOpSpan* test = &fTs[index];
-    const SkPoint* testPt = &test->fPt;
-    double testT = test->fT;
     SkOpSpan* oTest = &other->fTs[oIndex];
-    const SkPoint* oTestPt = &oTest->fPt;
-    SkASSERT(AlmostEqualUlps(*testPt, *oTestPt));
+    SkSTArray<kOutsideTrackedTCount, double, true> outsideTs;
+    SkSTArray<kOutsideTrackedTCount, double, true> oOutsideTs;
     do {
-        SkASSERT(test->fT < 1);
-        SkASSERT(oTest->fT < 1);
-#if 0
+        // if either span has an opposite value and the operands don't match, resolve first
+ //       SkASSERT(!test->fDone || !oTest->fDone);
         if (test->fDone || oTest->fDone) {
-#else  // consolidate the winding count even if done
-        if ((test->fWindValue == 0 && test->fOppValue == 0)
-                || (oTest->fWindValue == 0 && oTest->fOppValue == 0)) {
-#endif
-            SkDEBUGCODE(int firstWind = test->fWindValue);
-            SkDEBUGCODE(int firstOpp = test->fOppValue);
-            do {
-                SkASSERT(firstWind == fTs[index].fWindValue);
-                SkASSERT(firstOpp == fTs[index].fOppValue);
-                ++index;
-                SkASSERT(index < fTs.count());
-            } while (*testPt == fTs[index].fPt);
-            SkDEBUGCODE(firstWind = oTest->fWindValue);
-            SkDEBUGCODE(firstOpp = oTest->fOppValue);
-            do {
-                SkASSERT(firstWind == other->fTs[oIndex].fWindValue);
-                SkASSERT(firstOpp == other->fTs[oIndex].fOppValue);
-                ++oIndex;
-                SkASSERT(oIndex < other->fTs.count());
-            } while (*oTestPt == other->fTs[oIndex].fPt);
+            index = advanceCoincidentThis(oTest, opp, index);
+            oIndex = other->advanceCoincidentOther(test, oEndT, oIndex);
         } else {
-            if (!binary || test->fWindValue + oTest->fOppValue >= 0) {
-                bumpCoincidentThis(*oTest, binary, &index, &outsidePts);
-                other->bumpCoincidentOther(*test, &oIndex, &oOutsidePts);
-            } else {
-                other->bumpCoincidentThis(*test, binary, &oIndex, &oOutsidePts);
-                bumpCoincidentOther(*oTest, &index, &outsidePts);
-            }
+            index = bumpCoincidentThis(*oTest, opp, index, &outsideTs);
+            oIndex = other->bumpCoincidentOther(*test, oEndT, oIndex, &oOutsideTs);
         }
         test = &fTs[index];
-        testPt = &test->fPt;
-        testT = test->fT;
-        if (endPt == *testPt || endT == testT) {
-            break;
-        }
         oTest = &other->fTs[oIndex];
-        oTestPt = &oTest->fPt;
-        SkASSERT(AlmostEqualUlps(*testPt, *oTestPt));
-    } while (endPt != *oTestPt);
-    if (endPt != *testPt && endT != testT) {  // in rare cases, one may have ended before the other
-        int lastWind = test[-1].fWindValue;
-        int lastOpp = test[-1].fOppValue;
-        bool zero = lastWind == 0 && lastOpp == 0;
-        do {
-            if (test->fWindValue || test->fOppValue) {
-                test->fWindValue = lastWind;
-                test->fOppValue = lastOpp;
-                if (zero) {
-                    test->fDone = true;
-                    ++fDoneSpans;
-                }
-            }
-            test = &fTs[++index];
-            testPt = &test->fPt;
-        } while (endPt != *testPt);
-   }
-    int outCount = outsidePts.count();
-    if (!done() && outCount) {
-        addCoinOutsides(outsidePts[0], endPt, other);
+    } while (!approximately_negative(endT - test->fT));
+    SkASSERT(approximately_negative(oTest->fT - oEndT));
+    SkASSERT(approximately_negative(oEndT - oTest->fT));
+    if (!done() && outsideTs.count()) {
+        addCoinOutsides(outsideTs, other, oEndT);
     }
-    if (!other->done() && oOutsidePts.count()) {
-        other->addCoinOutsides(oOutsidePts[0], endPt, this);
+    if (!other->done() && oOutsideTs.count()) {
+        other->addCoinOutsides(oOutsideTs, this, endT);
     }
 }
 
@@ -847,12 +792,24 @@ void SkOpSegment::addTwoAngles(int start, int end, SkTArray<SkOpAngle, true>* an
     }
 }
 
-bool SkOpSegment::betweenPoints(double midT, const SkPoint& pt1, const SkPoint& pt2) const {
-    const SkPoint midPt = ptAtT(midT);
-    SkPathOpsBounds bounds;
-    bounds.set(pt1.fX, pt1.fY, pt2.fX, pt2.fY);
-    bounds.sort();
-    return bounds.almostContains(midPt);
+int SkOpSegment::advanceCoincidentThis(const SkOpSpan* oTest, bool opp, int index) {
+    SkOpSpan* const test = &fTs[index];
+    SkOpSpan* end;
+    do {
+        end = &fTs[++index];
+    } while (approximately_negative(end->fT - test->fT));
+    return index;
+}
+
+int SkOpSegment::advanceCoincidentOther(const SkOpSpan* test, double oEndT, int oIndex) {
+    SkOpSpan* const oTest = &fTs[oIndex];
+    SkOpSpan* oEnd = oTest;
+    const double oStartT = oTest->fT;
+    while (!approximately_negative(oEndT - oEnd->fT)
+            && approximately_negative(oEnd->fT - oStartT)) {
+        oEnd = &fTs[++oIndex];
+    }
+    return oIndex;
 }
 
 bool SkOpSegment::betweenTs(int lesser, double testT, int greater) const {
@@ -862,37 +819,17 @@ bool SkOpSegment::betweenTs(int lesser, double testT, int greater) const {
     return approximately_between(fTs[lesser].fT, testT, fTs[greater].fT);
 }
 
-// note that this follows the same logic flow as active angle
-bool SkOpSegment::buildAngles(int index, SkTArray<SkOpAngle, true>* angles, bool allowOpp) const {
+void SkOpSegment::buildAngles(int index, SkTArray<SkOpAngle, true>* angles, bool includeOpp) const {
     double referenceT = fTs[index].fT;
-    const SkPoint& referencePt = fTs[index].fPt;
     int lesser = index;
-    while (--lesser >= 0 && (allowOpp || fTs[lesser].fOther->fOperand == fOperand)
-            && (precisely_negative(referenceT - fTs[lesser].fT) || fTs[lesser].fTiny)) {
+    while (--lesser >= 0 && (includeOpp || fTs[lesser].fOther->fOperand == fOperand)
+            && precisely_negative(referenceT - fTs[lesser].fT)) {
         buildAnglesInner(lesser, angles);
     }
     do {
         buildAnglesInner(index, angles);
-        if (++index == fTs.count()) {
-            break;
-        }
-        if (!allowOpp && fTs[index].fOther->fOperand != fOperand) {
-            break;
-        }
-        if (fTs[index - 1].fTiny) {
-            referenceT = fTs[index].fT;
-            continue;
-        }
-        if (!precisely_negative(fTs[index].fT - referenceT) && fTs[index].fPt == referencePt) {
-            // FIXME
-            // testQuad8 generates the wrong output unless false is returned here. Other tests will
-            // take this path although they aren't required to. This means that many go much slower
-            // because of this sort fail.
- //           SkDebugf("!!!\n");
-            return false;
-        }
-    } while (precisely_negative(fTs[index].fT - referenceT));
-    return true;
+    } while (++index < fTs.count() && (includeOpp || fTs[index].fOther->fOperand == fOperand)
+            && precisely_negative(fTs[index].fT - referenceT));
 }
 
 void SkOpSegment::buildAnglesInner(int index, SkTArray<SkOpAngle, true>* angles) const {
@@ -914,173 +851,113 @@ void SkOpSegment::buildAnglesInner(int index, SkTArray<SkOpAngle, true>* angles)
     other->addTwoAngles(next, oIndex, angles);
 }
 
-int SkOpSegment::computeSum(int startIndex, int endIndex, SkOpAngle::IncludeType includeType,
-        SkTArray<SkOpAngle, true>* angles, SkTArray<SkOpAngle*, true>* sorted) {
-    addTwoAngles(startIndex, endIndex, angles);
-    if (!buildAngles(endIndex, angles, includeType == SkOpAngle::kBinaryOpp)) {
-        return SK_NaN32;
-    }
-    int angleCount = angles->count();
-    // abort early before sorting if an unsortable (not an unorderable) angle is found
-    if (includeType != SkOpAngle::kUnaryXor) {
-        int firstIndex = -1;
-        while (++firstIndex < angleCount) {
-            const SkOpAngle& angle = (*angles)[firstIndex];
-            if (angle.segment()->windSum(&angle) != SK_MinS32) {
-                break;
-            }
-        }
-        if (firstIndex == angleCount) {
-            return SK_MinS32;
-        }
-    }
-    bool sortable = SortAngles2(*angles, sorted);
-#if DEBUG_SORT_RAW
-    if (sorted->count() > 0) {
-        (*sorted)[0]->segment()->debugShowSort(__FUNCTION__, *sorted, 0, 0, 0, sortable);
-    }
+int SkOpSegment::computeSum(int startIndex, int endIndex, bool binary) {
+    SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle, true> angles;
+    addTwoAngles(startIndex, endIndex, &angles);
+    buildAngles(endIndex, &angles, false);
+    // OPTIMIZATION: check all angles to see if any have computed wind sum
+    // before sorting (early exit if none)
+    SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle*, true> sorted;
+    // FIXME?: Not sure if this sort must be ordered or if the relaxed ordering is OK ...
+    bool sortable = SortAngles(angles, &sorted, SkOpSegment::kMustBeOrdered_SortAngleKind);
+#if DEBUG_SORT
+    sorted[0]->segment()->debugShowSort(__FUNCTION__, sorted, 0, 0, 0, sortable);
 #endif
     if (!sortable) {
-        return SK_NaN32;
-    }
-    if (includeType == SkOpAngle::kUnaryXor) {
         return SK_MinS32;
     }
-    // if all angles have a computed winding,
-    //  or if no adjacent angles are orderable,
-    //  or if adjacent orderable angles have no computed winding,
-    //  there's nothing to do
-    // if two orderable angles are adjacent, and one has winding computed, transfer to the other
-    const SkOpAngle* baseAngle = NULL;
-    int last = angleCount;
-    int finalInitialOrderable = -1;
-    bool tryReverse = false;
-    // look for counterclockwise transfers
+    int angleCount = angles.count();
+    const SkOpAngle* angle;
+    const SkOpSegment* base;
+    int winding;
+    int oWinding;
+    int firstIndex = 0;
     do {
-        int index = 0;
-        do {
-            SkOpAngle* testAngle = (*sorted)[index];
-            int testWinding = testAngle->segment()->windSum(testAngle);
-            if (SK_MinS32 != testWinding && !testAngle->unorderable()) {
-                baseAngle = testAngle;
-                continue;
-            }
-            if (testAngle->unorderable()) {
-                baseAngle = NULL;
-                tryReverse = true;
-                continue;
-            }
-            if (baseAngle) {
-                ComputeOneSum(baseAngle, testAngle, includeType);
-                baseAngle = SK_MinS32 != testAngle->segment()->windSum(testAngle) ? testAngle
-                        : NULL;
-                tryReverse |= !baseAngle;
-                continue;
-            }
-            if (finalInitialOrderable + 1 == index) {
-                finalInitialOrderable = index;
-            }
-        } while (++index != last);
-        if (finalInitialOrderable < 0) {
+        angle = sorted[firstIndex];
+        base = angle->segment();
+        winding = base->windSum(angle);
+        if (winding != SK_MinS32) {
+            oWinding = base->oppSum(angle);
             break;
         }
-        last = finalInitialOrderable + 1;
-        finalInitialOrderable = -2;  // make this always negative the second time through
-    } while (baseAngle);
-    if (tryReverse) {
-        baseAngle = NULL;
-        last = 0;
-        finalInitialOrderable = angleCount;
-        do {
-            int index = angleCount;
-            while (--index >= last) {
-                SkOpAngle* testAngle = (*sorted)[index];
-                int testWinding = testAngle->segment()->windSum(testAngle);
-                if (SK_MinS32 != testWinding) {
-                    baseAngle = testAngle;
-                    continue;
-                }
-                if (testAngle->unorderable()) {
-                    baseAngle = NULL;
-                    continue;
-                }
-                if (baseAngle) {
-                    ComputeOneSumReverse(baseAngle, testAngle, includeType);
-                    baseAngle = SK_MinS32 != testAngle->segment()->windSum(testAngle) ? testAngle
-                            : NULL;
-                    continue;
-                }
-                if (finalInitialOrderable - 1 == index) {
-                    finalInitialOrderable = index;
-                }
-            }
-            if (finalInitialOrderable >= angleCount) {
-                break;
-            }
-            last = finalInitialOrderable;
-            finalInitialOrderable = angleCount + 1;  // make this inactive 2nd time through
-        } while (baseAngle);
+        if (++firstIndex == angleCount) {
+            return SK_MinS32;
+        }
+    } while (true);
+    // turn winding into contourWinding
+    int spanWinding = base->spanSign(angle);
+    bool inner = UseInnerWinding(winding + spanWinding, winding);
+#if DEBUG_WINDING
+    SkDebugf("%s spanWinding=%d winding=%d sign=%d inner=%d result=%d\n", __FUNCTION__,
+        spanWinding, winding, angle->sign(), inner,
+        inner ? winding + spanWinding : winding);
+#endif
+    if (inner) {
+        winding += spanWinding;
     }
+#if DEBUG_SORT
+    base->debugShowSort(__FUNCTION__, sorted, firstIndex, winding, oWinding, sortable);
+#endif
+    int nextIndex = firstIndex + 1;
+    int lastIndex = firstIndex != 0 ? firstIndex : angleCount;
+    winding -= base->spanSign(angle);
+    oWinding -= base->oppSign(angle);
+    do {
+        if (nextIndex == angleCount) {
+            nextIndex = 0;
+        }
+        angle = sorted[nextIndex];
+        SkOpSegment* segment = angle->segment();
+        bool opp = base->fOperand ^ segment->fOperand;
+        int maxWinding, oMaxWinding;
+        int spanSign = segment->spanSign(angle);
+        int oppoSign = segment->oppSign(angle);
+        if (opp) {
+            oMaxWinding = oWinding;
+            oWinding -= spanSign;
+            maxWinding = winding;
+            if (oppoSign) {
+                winding -= oppoSign;
+            }
+        } else {
+            maxWinding = winding;
+            winding -= spanSign;
+            oMaxWinding = oWinding;
+            if (oppoSign) {
+                oWinding -= oppoSign;
+            }
+        }
+        if (segment->windSum(angle) == SK_MinS32) {
+            if (opp) {
+                if (UseInnerWinding(oMaxWinding, oWinding)) {
+                    oMaxWinding = oWinding;
+                }
+                if (oppoSign && UseInnerWinding(maxWinding, winding)) {
+                    maxWinding = winding;
+                }
+#ifdef SK_DEBUG
+                SkASSERT(abs(maxWinding) <= gDebugMaxWindSum);
+                SkASSERT(abs(oMaxWinding) <= gDebugMaxWindSum);
+#endif
+                (void) segment->markAndChaseWinding(angle, oMaxWinding, maxWinding);
+            } else {
+                if (UseInnerWinding(maxWinding, winding)) {
+                    maxWinding = winding;
+                }
+                if (oppoSign && UseInnerWinding(oMaxWinding, oWinding)) {
+                    oMaxWinding = oWinding;
+                }
+#ifdef SK_DEBUG
+                SkASSERT(abs(maxWinding) <= gDebugMaxWindSum);
+                SkASSERT(abs(binary ? oMaxWinding : 0) <= gDebugMaxWindSum);
+#endif
+                (void) segment->markAndChaseWinding(angle, maxWinding,
+                        binary ? oMaxWinding : 0);
+            }
+        }
+    } while (++nextIndex != lastIndex);
     int minIndex = SkMin32(startIndex, endIndex);
     return windSum(minIndex);
-}
-
-void SkOpSegment::ComputeOneSum(const SkOpAngle* baseAngle, SkOpAngle* nextAngle,
-        SkOpAngle::IncludeType includeType) {
-    const SkOpSegment* baseSegment = baseAngle->segment();
-    int sumMiWinding = baseSegment->updateWindingReverse(baseAngle);
-    int sumSuWinding;
-    bool binary = includeType >= SkOpAngle::kBinarySingle;
-    if (binary) {
-        sumSuWinding = baseSegment->updateOppWindingReverse(baseAngle);
-        if (baseSegment->operand()) {
-            SkTSwap<int>(sumMiWinding, sumSuWinding);
-        }
-    }
-    SkOpSegment* nextSegment = nextAngle->segment();
-    int maxWinding, sumWinding;
-    SkOpSpan* last;
-    if (binary) {
-        int oppMaxWinding, oppSumWinding;
-        nextSegment->setUpWindings(nextAngle->start(), nextAngle->end(), &sumMiWinding,
-                &sumSuWinding, &maxWinding, &sumWinding, &oppMaxWinding, &oppSumWinding);
-        last = nextSegment->markAngle(maxWinding, sumWinding, oppMaxWinding, oppSumWinding,
-                nextAngle);
-    } else {
-        nextSegment->setUpWindings(nextAngle->start(), nextAngle->end(), &sumMiWinding,
-                &maxWinding, &sumWinding);
-        last = nextSegment->markAngle(maxWinding, sumWinding, nextAngle);
-    }
-    nextAngle->setLastMarked(last);
-}
-
-void SkOpSegment::ComputeOneSumReverse(const SkOpAngle* baseAngle, SkOpAngle* nextAngle,
-        SkOpAngle::IncludeType includeType) {
-    const SkOpSegment* baseSegment = baseAngle->segment();
-    int sumMiWinding = baseSegment->updateWinding(baseAngle);
-    int sumSuWinding;
-    bool binary = includeType >= SkOpAngle::kBinarySingle;
-    if (binary) {
-        sumSuWinding = baseSegment->updateOppWinding(baseAngle);
-        if (baseSegment->operand()) {
-            SkTSwap<int>(sumMiWinding, sumSuWinding);
-        }
-    }
-    SkOpSegment* nextSegment = nextAngle->segment();
-    int maxWinding, sumWinding;
-    SkOpSpan* last;
-    if (binary) {
-        int oppMaxWinding, oppSumWinding;
-        nextSegment->setUpWindings(nextAngle->end(), nextAngle->start(), &sumMiWinding,
-                &sumSuWinding, &maxWinding, &sumWinding, &oppMaxWinding, &oppSumWinding);
-        last = nextSegment->markAngle(maxWinding, sumWinding, oppMaxWinding, oppSumWinding,
-                nextAngle);
-    } else {
-        nextSegment->setUpWindings(nextAngle->end(), nextAngle->start(), &sumMiWinding,
-                &maxWinding, &sumWinding);
-        last = nextSegment->markAngle(maxWinding, sumWinding, nextAngle);
-    }
-    nextAngle->setLastMarked(last);
 }
 
 int SkOpSegment::crossedSpanY(const SkPoint& basePt, SkScalar* bestY, double* hitT,
@@ -1108,7 +985,6 @@ int SkOpSegment::crossedSpanY(const SkPoint& basePt, SkScalar* bestY, double* hi
     SkIntersections intersections;
     // OPTIMIZE: use specialty function that intersects ray with curve,
     // returning t values only for curve (we don't care about t on ray)
-    intersections.allowNear(false);
     int pts = (intersections.*CurveVertical[SkPathOpsVerbToPoints(fVerb)])
             (fPts, top, bottom, basePt.fX, false);
     if (pts == 0 || (current && pts == 1)) {
@@ -1174,20 +1050,18 @@ int SkOpSegment::crossedSpanY(const SkPoint& basePt, SkScalar* bestY, double* hi
     return bestTIndex;
 }
 
-bool SkOpSegment::decrementSpan(SkOpSpan* span) {
+void SkOpSegment::decrementSpan(SkOpSpan* span) {
     SkASSERT(span->fWindValue > 0);
     if (--(span->fWindValue) == 0) {
         if (!span->fOppValue && !span->fDone) {
             span->fDone = true;
             ++fDoneSpans;
-            return true;
         }
     }
-    return false;
 }
 
 bool SkOpSegment::bumpSpan(SkOpSpan* span, int windDelta, int oppDelta) {
-    SkASSERT(!span->fDone || span->fTiny || span->fSmall);
+    SkASSERT(!span->fDone);
     span->fWindValue += windDelta;
     SkASSERT(span->fWindValue >= 0);
     span->fOppValue += oppDelta;
@@ -1209,269 +1083,98 @@ bool SkOpSegment::bumpSpan(SkOpSpan* span, int windDelta, int oppDelta) {
 // look to see if the curve end intersects an intermediary that intersects the other
 void SkOpSegment::checkEnds() {
     debugValidate();
-    SkSTArray<kMissingSpanCount, MissingSpan, true> missingSpans;
+    SkTDArray<SkOpSpan> missingSpans;
     int count = fTs.count();
     for (int index = 0; index < count; ++index) {
         const SkOpSpan& span = fTs[index];
-        double otherT = span.fOtherT;
-        if (otherT != 0 && otherT != 1) { // only check ends
-            continue;
-        }
         const SkOpSegment* other = span.fOther;
-        // peek start/last describe the range of spans that match the other t of this span
-        int peekStart = span.fOtherIndex;
-        while (--peekStart >= 0 && other->fTs[peekStart].fT == otherT)
-            ;
-        int otherCount = other->fTs.count();
-        int peekLast = span.fOtherIndex;
-        while (++peekLast < otherCount && other->fTs[peekLast].fT == otherT)
-            ;
-        if (++peekStart == --peekLast) { // if there isn't a range, there's nothing to do
+        const SkOpSpan* otherSpan = &other->fTs[span.fOtherIndex];
+        double otherT = otherSpan->fT;
+        if (otherT != 0 && otherT != 1) {
             continue;
         }
-        // t start/last describe the range of spans that match the t of this span
+        int peekStart = span.fOtherIndex;
+        while (peekStart > 0) {
+            const SkOpSpan* peeker = &other->fTs[peekStart - 1];
+            if (peeker->fT != otherT) {
+                break;
+            }
+            --peekStart;
+        }
+        int otherLast = other->fTs.count() - 1;
+        int peekLast = span.fOtherIndex;
+        while (peekLast < otherLast) {
+            const SkOpSpan* peeker = &other->fTs[peekLast + 1];
+            if (peeker->fT != otherT) {
+                break;
+            }
+            ++peekLast;
+        }
+        if (peekStart == peekLast) {
+            continue;
+        }
         double t = span.fT;
-        double tBottom = -1;
-        int tStart = -1;
-        int tLast = count;
-        bool lastSmall = false;
-        double afterT = t;
-        for (int inner = 0; inner < count; ++inner) {
-            double innerT = fTs[inner].fT;
-            if (innerT <= t && innerT > tBottom) {
-                if (innerT < t || !lastSmall) {
-                    tStart = inner - 1;
-                }
-                tBottom = innerT;
-            }
-            if (innerT > afterT) {
-                if (t == afterT && lastSmall) {
-                    afterT = innerT;
-                } else {
-                    tLast = inner;
-                    break;
-                }
-            }
-            lastSmall = innerT <= t ? fTs[inner].fSmall : false;
+        int tStart = index;
+        while (tStart > 0 && t == fTs[tStart - 1].fT) {
+            --tStart;
+        }
+        int tLast = index;
+        int last = count - 1;
+        while (tLast < last && t == fTs[tLast + 1].fT) {
+            ++tLast;
         }
         for (int peekIndex = peekStart; peekIndex <= peekLast; ++peekIndex) {
-            if (peekIndex == span.fOtherIndex) {  // skip the other span pointed to by this span
+            if (peekIndex == span.fOtherIndex) {
                 continue;
             }
             const SkOpSpan& peekSpan = other->fTs[peekIndex];
             SkOpSegment* match = peekSpan.fOther;
-            if (match->done()) {
-                continue;  // if the edge has already been eaten (likely coincidence), ignore it
-            }
             const double matchT = peekSpan.fOtherT;
-            // see if any of the spans match the other spans
-            for (int tIndex = tStart + 1; tIndex < tLast; ++tIndex) {
+            for (int tIndex = tStart; tIndex <= tLast; ++tIndex) {
                 const SkOpSpan& tSpan = fTs[tIndex];
-                if (tSpan.fOther == match) {
-                    if (tSpan.fOtherT == matchT) {
-                        goto nextPeekIndex;
-                    }
-                    double midT = (tSpan.fOtherT + matchT) / 2;
-                    if (match->betweenPoints(midT, tSpan.fPt, peekSpan.fPt)) {
-                        goto nextPeekIndex;
-                    }
+                if (tSpan.fOther == match && tSpan.fOtherT == matchT) {
+                    goto nextPeeker;
                 }
             }
-            if (missingSpans.count() > 0) {
-                const MissingSpan& lastMissing = missingSpans.back();
-                if (lastMissing.fT == t
-                        && lastMissing.fOther == match
-                        && lastMissing.fOtherT == matchT) {
-                    SkASSERT(lastMissing.fPt == peekSpan.fPt);
-                    continue;
-                }
-            }
-#if DEBUG_CHECK_ENDS
-            SkDebugf("%s id=%d missing t=%1.9g other=%d otherT=%1.9g pt=(%1.9g,%1.9g)\n",
-                    __FUNCTION__, fID, t, match->fID, matchT, peekSpan.fPt.fX, peekSpan.fPt.fY);
-#endif
             // this segment is missing a entry that the other contains
             // remember so we can add the missing one and recompute the indices
-            {
-                MissingSpan& missing = missingSpans.push_back();
-                SkDEBUGCODE(sk_bzero(&missing, sizeof(missing)));
-                missing.fT = t;
-                missing.fOther = match;
-                missing.fOtherT = matchT;
-                missing.fPt = peekSpan.fPt;
-            }
-            break;
-nextPeekIndex:
-            ;
+            SkOpSpan* missing = missingSpans.append();
+            missing->fT = t;
+            missing->fOther = match;
+            missing->fOtherT = matchT;
+            missing->fPt = peekSpan.fPt;
         }
+nextPeeker:
+        ;
     }
-    if (missingSpans.count() == 0) {
-        debugValidate();
+    int missingCount = missingSpans.count();
+    if (missingCount == 0) {
         return;
     }
     debugValidate();
-    int missingCount = missingSpans.count();
     for (int index = 0; index < missingCount; ++index)  {
-        MissingSpan& missing = missingSpans[index];
+        const SkOpSpan& missing = missingSpans[index];
         addTPair(missing.fT, missing.fOther, missing.fOtherT, false, missing.fPt);
     }
     fixOtherTIndex();
-    // OPTIMIZATION: this may fix indices more than once. Build an array of unique segments to
-    // avoid this
     for (int index = 0; index < missingCount; ++index)  {
-        missingSpans[index].fOther->fixOtherTIndex();
+        const SkOpSpan& missing = missingSpans[index];
+        missing.fOther->fixOtherTIndex();
     }
     debugValidate();
 }
 
-bool SkOpSegment::checkSmall(int index) const {
-    if (fTs[index].fSmall) {
+bool SkOpSegment::equalPoints(int greaterTIndex, int lesserTIndex) {
+    SkASSERT(greaterTIndex >= lesserTIndex);
+    double greaterT = fTs[greaterTIndex].fT;
+    double lesserT = fTs[lesserTIndex].fT;
+    if (greaterT == lesserT) {
         return true;
     }
-    double tBase = fTs[index].fT;
-    while (index > 0 && precisely_negative(tBase - fTs[--index].fT))
-        ;
-    return fTs[index].fSmall;
-}
-
-// if pair of spans on either side of tiny have the same end point and mid point, mark
-// them as parallel
-// OPTIMIZATION : mark the segment to note that some span is tiny
-void SkOpSegment::checkTiny() {
-    SkSTArray<kMissingSpanCount, MissingSpan, true> missingSpans;
-    SkOpSpan* thisSpan = fTs.begin() - 1;
-    const SkOpSpan* endSpan = fTs.end() - 1;  // last can't be tiny
-    while (++thisSpan < endSpan) {
-        if (!thisSpan->fTiny) {
-            continue;
-        }
-        SkOpSpan* nextSpan = thisSpan + 1;
-        double thisT = thisSpan->fT;
-        double nextT = nextSpan->fT;
-        if (thisT == nextT) {
-            continue;
-        }
-        SkASSERT(thisT < nextT);
-        SkASSERT(thisSpan->fPt == nextSpan->fPt);
-        SkOpSegment* thisOther = thisSpan->fOther;
-        SkOpSegment* nextOther = nextSpan->fOther;
-        int oIndex = thisSpan->fOtherIndex;
-        for (int oStep = -1; oStep <= 1; oStep += 2) {
-            int oEnd = thisOther->nextExactSpan(oIndex, oStep);
-            if (oEnd < 0) {
-                continue;
-            }
-            const SkOpSpan& oSpan = thisOther->span(oEnd);
-            int nIndex = nextSpan->fOtherIndex;
-            for (int nStep = -1; nStep <= 1; nStep += 2) {
-                int nEnd = nextOther->nextExactSpan(nIndex, nStep);
-                if (nEnd < 0) {
-                    continue;
-                }
-                const SkOpSpan& nSpan = nextOther->span(nEnd);
-                if (oSpan.fPt != nSpan.fPt) {
-                    continue;
-                }
-                double oMidT = (thisSpan->fOtherT + oSpan.fT) / 2;
-                const SkPoint& oPt = thisOther->ptAtT(oMidT);
-                double nMidT = (nextSpan->fOtherT + nSpan.fT) / 2;
-                const SkPoint& nPt = nextOther->ptAtT(nMidT);
-                if (!AlmostEqualUlps(oPt, nPt)) {
-                    continue;
-                }
-#if DEBUG_CHECK_TINY
-                SkDebugf("%s [%d] add coincidence [%d] [%d]\n", __FUNCTION__, fID,
-                    thisOther->fID, nextOther->fID);
-#endif
-                // this segment is missing a entry that the other contains
-                // remember so we can add the missing one and recompute the indices
-                MissingSpan& missing = missingSpans.push_back();
-                SkDEBUGCODE(sk_bzero(&missing, sizeof(missing)));
-                missing.fSegment = thisOther;
-                missing.fT = thisSpan->fOtherT;
-                missing.fOther = nextOther;
-                missing.fOtherT = nextSpan->fOtherT;
-                missing.fPt = thisSpan->fPt;
-            }
-        }
+    if (!approximately_negative(greaterT - lesserT)) {
+        return false;
     }
-    int missingCount = missingSpans.count();
-    if (!missingCount) {
-        return;
-    }
-    for (int index = 0; index < missingCount; ++index)  {
-        MissingSpan& missing = missingSpans[index];
-        missing.fSegment->addTPair(missing.fT, missing.fOther, missing.fOtherT, false, missing.fPt);
-    }
-    for (int index = 0; index < missingCount; ++index)  {
-        MissingSpan& missing = missingSpans[index];
-        missing.fSegment->fixOtherTIndex();
-        missing.fOther->fixOtherTIndex();
-    }
-}
-
-bool SkOpSegment::findCoincidentMatch(const SkOpSpan* span, const SkOpSegment* other, int oStart,
-        int oEnd, int step, SkPoint* startPt, SkPoint* endPt, double* endT) const {
-    SkASSERT(span->fT == 0 || span->fT == 1);
-    SkASSERT(span->fOtherT == 0 || span->fOtherT == 1);
-    const SkOpSpan* otherSpan = &other->span(oEnd);
-    double refT = otherSpan->fT;
-    const SkPoint& refPt = otherSpan->fPt;
-    const SkOpSpan* lastSpan = &other->span(step > 0 ? other->count() - 1 : 0);
-    do {
-        const SkOpSegment* match = span->fOther;
-        if (match == otherSpan->fOther) {
-            // find start of respective spans and see if both have winding
-            int startIndex, endIndex;
-            if (span->fOtherT == 1) {
-                endIndex = span->fOtherIndex;
-                startIndex = match->nextExactSpan(endIndex, -1);
-            } else {
-                startIndex = span->fOtherIndex;
-                endIndex = match->nextExactSpan(startIndex, 1);
-            }
-            const SkOpSpan& startSpan = match->span(startIndex);
-            if (startSpan.fWindValue != 0) {
-                // draw ray from endSpan.fPt perpendicular to end tangent and measure distance
-                // to other segment.
-                const SkOpSpan& endSpan = match->span(endIndex);
-                SkDLine ray;
-                SkVector dxdy;
-                if (span->fOtherT == 1) {
-                    ray.fPts[0].set(startSpan.fPt);
-                    dxdy = match->dxdy(startIndex);
-                } else {
-                    ray.fPts[0].set(endSpan.fPt);
-                    dxdy = match->dxdy(endIndex);
-                }
-                ray.fPts[1].fX = ray.fPts[0].fX + dxdy.fY;
-                ray.fPts[1].fY = ray.fPts[0].fY - dxdy.fX;
-                SkIntersections i;
-                int roots = (i.*CurveRay[SkPathOpsVerbToPoints(other->verb())])(other->pts(), ray);
-                for (int index = 0; index < roots; ++index) {
-                    if (ray.fPts[0].approximatelyEqual(i.pt(index))) {
-                        double matchMidT = (match->span(startIndex).fT
-                                + match->span(endIndex).fT) / 2;
-                        SkPoint matchMidPt = match->ptAtT(matchMidT);
-                        double otherMidT = (i[0][index] + other->span(oStart).fT) / 2;
-                        SkPoint otherMidPt = other->ptAtT(otherMidT);
-                        if (SkDPoint::ApproximatelyEqual(matchMidPt, otherMidPt)) {
-                            *startPt = startSpan.fPt;
-                            *endPt = endSpan.fPt;
-                            *endT = endSpan.fT;
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        }
-        if (otherSpan == lastSpan) {
-            break;
-        }
-        otherSpan += step;
-    } while (otherSpan->fT == refT || otherSpan->fPt == refPt);
-    return false;
+    return xyAtT(greaterTIndex) == xyAtT(lesserTIndex);
 }
 
 /*
@@ -1511,7 +1214,8 @@ SkOpSegment* SkOpSegment::findNextOp(SkTDArray<SkOpSpan*>* chase, int* nextStart
         *nextEnd = *nextStart;
         do {
             *nextEnd += step;
-        } while (precisely_zero(startT - other->fTs[*nextEnd].fT));
+        }
+        while (precisely_zero(startT - other->fTs[*nextEnd].fT));
         SkASSERT(step < 0 ? *nextEnd >= 0 : *nextEnd < other->fTs.count());
         if (other->isTiny(SkMin32(*nextStart, *nextEnd))) {
             *unsortable = true;
@@ -1523,17 +1227,13 @@ SkOpSegment* SkOpSegment::findNextOp(SkTDArray<SkOpSpan*>* chase, int* nextStart
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle, true> angles;
     SkASSERT(startIndex - endIndex != 0);
     SkASSERT((startIndex - endIndex < 0) ^ (step < 0));
+    addTwoAngles(startIndex, end, &angles);
+    buildAngles(end, &angles, true);
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle*, true> sorted;
-    int calcWinding = computeSum(startIndex, end, SkOpAngle::kBinaryOpp, &angles, &sorted);
-    bool sortable = calcWinding != SK_NaN32;
-    if (sortable && sorted.count() == 0) {
-        // if no edge has a computed winding sum, we can go no further
-        *unsortable = true;
-        return NULL;
-    }
+    bool sortable = SortAngles(angles, &sorted, SkOpSegment::kMustBeOrdered_SortAngleKind);
     int angleCount = angles.count();
     int firstIndex = findStartingEdge(sorted, startIndex, end);
-    SkASSERT(!sortable || firstIndex >= 0);
+    SkASSERT(firstIndex >= 0);
 #if DEBUG_SORT
     debugShowSort(__FUNCTION__, sorted, firstIndex, sortable);
 #endif
@@ -1577,25 +1277,22 @@ SkOpSegment* SkOpSegment::findNextOp(SkTDArray<SkOpSpan*>* chase, int* nextStart
                     return NULL;
                 }
                 foundAngle = nextAngle;
-                foundDone = nextSegment->done(nextAngle);
+                foundDone = nextSegment->done(nextAngle) && !nextSegment->isTiny(nextAngle);
             }
         }
         if (nextSegment->done()) {
             continue;
         }
-        if (nextSegment->isTiny(nextAngle)) {
+        if (nextSegment->windSum(nextAngle) != SK_MinS32) {
             continue;
         }
-        if (!activeAngle) {
-            nextSegment->markAndChaseDoneBinary(nextAngle->start(), nextAngle->end());
-        }
-        SkOpSpan* last = nextAngle->lastMarked();
+        SkOpSpan* last = nextSegment->markAngle(maxWinding, sumWinding, oppMaxWinding,
+                oppSumWinding, activeAngle, nextAngle);
         if (last) {
             *chase->append() = last;
 #if DEBUG_WINDING
-            SkDebugf("%s chase.append id=%d windSum=%d small=%d\n", __FUNCTION__,
-                    last->fOther->fTs[last->fOtherIndex].fOther->debugID(), last->fWindSum,
-                    last->fSmall);
+            SkDebugf("%s chase.append id=%d\n", __FUNCTION__,
+                    last->fOther->fTs[last->fOtherIndex].fOther->debugID());
 #endif
         }
     } while (++nextIndex != lastIndex);
@@ -1606,6 +1303,7 @@ SkOpSegment* SkOpSegment::findNextOp(SkTDArray<SkOpSpan*>* chase, int* nextStart
     *nextStart = foundAngle->start();
     *nextEnd = foundAngle->end();
     nextSegment = foundAngle->segment();
+
 #if DEBUG_WINDING
     SkDebugf("%s from:[%d] to:[%d] start=%d end=%d\n",
             __FUNCTION__, debugID(), nextSegment->debugID(), *nextStart, *nextEnd);
@@ -1642,24 +1340,22 @@ SkOpSegment* SkOpSegment::findNextWinding(SkTDArray<SkOpSpan*>* chase, int* next
         *nextEnd = *nextStart;
         do {
             *nextEnd += step;
-        } while (precisely_zero(startT - other->fTs[*nextEnd].fT));
-        SkASSERT(step < 0 ? *nextEnd >= 0 : *nextEnd < other->fTs.count());
-        if (other->isTiny(SkMin32(*nextStart, *nextEnd))) {
-            *unsortable = true;
-            return NULL;
         }
+        while (precisely_zero(startT - other->fTs[*nextEnd].fT));
+        SkASSERT(step < 0 ? *nextEnd >= 0 : *nextEnd < other->fTs.count());
         return other;
     }
     // more than one viable candidate -- measure angles to find best
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle, true> angles;
     SkASSERT(startIndex - endIndex != 0);
     SkASSERT((startIndex - endIndex < 0) ^ (step < 0));
+    addTwoAngles(startIndex, end, &angles);
+    buildAngles(end, &angles, true);
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle*, true> sorted;
-    int calcWinding = computeSum(startIndex, end, SkOpAngle::kUnaryWinding, &angles, &sorted);
-    bool sortable = calcWinding != SK_NaN32;
+    bool sortable = SortAngles(angles, &sorted, SkOpSegment::kMustBeOrdered_SortAngleKind);
     int angleCount = angles.count();
     int firstIndex = findStartingEdge(sorted, startIndex, end);
-    SkASSERT(!sortable || firstIndex >= 0);
+    SkASSERT(firstIndex >= 0);
 #if DEBUG_SORT
     debugShowSort(__FUNCTION__, sorted, firstIndex, sortable);
 #endif
@@ -1704,19 +1400,15 @@ SkOpSegment* SkOpSegment::findNextWinding(SkTDArray<SkOpSpan*>* chase, int* next
         if (nextSegment->done()) {
             continue;
         }
-        if (nextSegment->isTiny(nextAngle)) {
+        if (nextSegment->windSum(nextAngle) != SK_MinS32) {
             continue;
         }
-        if (!activeAngle) {
-            nextSegment->markAndChaseDoneUnary(nextAngle->start(), nextAngle->end());
-        }
-        SkOpSpan* last = nextAngle->lastMarked();
+        SkOpSpan* last = nextSegment->markAngle(maxWinding, sumWinding, activeAngle, nextAngle);
         if (last) {
             *chase->append() = last;
 #if DEBUG_WINDING
-            SkDebugf("%s chase.append id=%d windSum=%d small=%d\n", __FUNCTION__,
-                    last->fOther->fTs[last->fOtherIndex].fOther->debugID(), last->fWindSum,
-                    last->fSmall);
+            SkDebugf("%s chase.append id=%d\n", __FUNCTION__,
+                    last->fOther->fTs[last->fOtherIndex].fOther->debugID());
 #endif
         }
     } while (++nextIndex != lastIndex);
@@ -1739,7 +1431,8 @@ SkOpSegment* SkOpSegment::findNextXor(int* nextStart, int* nextEnd, bool* unsort
     const int endIndex = *nextEnd;
     SkASSERT(startIndex != endIndex);
     SkDEBUGCODE(int count = fTs.count());
-    SkASSERT(startIndex < endIndex ? startIndex < count - 1 : startIndex > 0);
+    SkASSERT(startIndex < endIndex ? startIndex < count - 1
+            : startIndex > 0);
     int step = SkSign32(endIndex - startIndex);
     int end = nextExactSpan(startIndex, step);
     SkASSERT(end >= 0);
@@ -1768,11 +1461,14 @@ SkOpSegment* SkOpSegment::findNextXor(int* nextStart, int* nextEnd, bool* unsort
             *nextEnd = *nextStart;
             do {
                 *nextEnd += step;
-            } while (precisely_zero(startT - other->fTs[*nextEnd].fT));
+            }
+             while (precisely_zero(startT - other->fTs[*nextEnd].fT));
             if (other->fTs[SkMin32(*nextStart, *nextEnd)].fWindValue) {
                 break;
             }
+#ifdef SK_DEBUG
             SkASSERT(firstLoop);
+#endif
             SkDEBUGCODE(firstLoop = false;)
             step = -step;
         } while (true);
@@ -1782,24 +1478,25 @@ SkOpSegment* SkOpSegment::findNextXor(int* nextStart, int* nextEnd, bool* unsort
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle, true> angles;
     SkASSERT(startIndex - endIndex != 0);
     SkASSERT((startIndex - endIndex < 0) ^ (step < 0));
+    addTwoAngles(startIndex, end, &angles);
+    buildAngles(end, &angles, false);
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle*, true> sorted;
-    int calcWinding = computeSum(startIndex, end, SkOpAngle::kUnaryXor, &angles, &sorted);
-    bool sortable = calcWinding != SK_NaN32;
+    bool sortable = SortAngles(angles, &sorted, SkOpSegment::kMustBeOrdered_SortAngleKind);
+    if (!sortable) {
+        *unsortable = true;
+#if DEBUG_SORT
+        debugShowSort(__FUNCTION__, sorted, findStartingEdge(sorted, startIndex, end), 0, 0,
+                sortable);
+#endif
+        return NULL;
+    }
     int angleCount = angles.count();
     int firstIndex = findStartingEdge(sorted, startIndex, end);
-    SkASSERT(!sortable || firstIndex >= 0);
+    SkASSERT(firstIndex >= 0);
 #if DEBUG_SORT
     debugShowSort(__FUNCTION__, sorted, firstIndex, 0, 0, sortable);
 #endif
-    if (!sortable) {
-        *unsortable = true;
-        return NULL;
-    }
     SkASSERT(sorted[firstIndex]->segment() == this);
-#if DEBUG_WINDING
-    SkDebugf("%s firstIndex=[%d] sign=%d\n", __FUNCTION__, firstIndex,
-            sorted[firstIndex]->sign());
-#endif
     int nextIndex = firstIndex + 1;
     int lastIndex = firstIndex != 0 ? firstIndex : angleCount;
     const SkOpAngle* foundAngle = NULL;
@@ -1854,16 +1551,136 @@ int SkOpSegment::findStartingEdge(const SkTArray<SkOpAngle*, true>& sorted, int 
     return firstIndex;
 }
 
-int SkOpSegment::findT(double t, const SkOpSegment* match) const {
-    int count = this->count();
-    for (int index = 0; index < count; ++index) {
-        const SkOpSpan& span = fTs[index];
-        if (span.fT == t && span.fOther == match) {
-            return index;
+// FIXME: this is tricky code; needs its own unit test
+// note that fOtherIndex isn't computed yet, so it can't be used here
+void SkOpSegment::findTooCloseToCall() {
+    int count = fTs.count();
+    if (count < 3) {  // require t=0, x, 1 at minimum
+        return;
+    }
+    int matchIndex = 0;
+    int moCount;
+    SkOpSpan* match;
+    SkOpSegment* mOther;
+    do {
+        match = &fTs[matchIndex];
+        mOther = match->fOther;
+        // FIXME: allow quads, cubics to be near coincident?
+        if (mOther->fVerb == SkPath::kLine_Verb) {
+            moCount = mOther->fTs.count();
+            if (moCount >= 3) {
+                break;
+            }
+        }
+        if (++matchIndex >= count) {
+            return;
+        }
+    } while (true);  // require t=0, x, 1 at minimum
+    // OPTIMIZATION: defer matchPt until qualifying toCount is found?
+    const SkPoint* matchPt = &xyAtT(match);
+    // look for a pair of nearby T values that map to the same (x,y) value
+    // if found, see if the pair of other segments share a common point. If
+    // so, the span from here to there is coincident.
+    for (int index = matchIndex + 1; index < count; ++index) {
+        SkOpSpan* test = &fTs[index];
+        if (test->fDone) {
+            continue;
+        }
+        SkOpSegment* tOther = test->fOther;
+        if (tOther->fVerb != SkPath::kLine_Verb) {
+            continue;  // FIXME: allow quads, cubics to be near coincident?
+        }
+        int toCount = tOther->fTs.count();
+        if (toCount < 3) {  // require t=0, x, 1 at minimum
+            continue;
+        }
+        const SkPoint* testPt = &xyAtT(test);
+        if (*matchPt != *testPt) {
+            matchIndex = index;
+            moCount = toCount;
+            match = test;
+            mOther = tOther;
+            matchPt = testPt;
+            continue;
+        }
+        int moStart = -1;
+        int moEnd = -1;
+        double moStartT = 0;
+        double moEndT = 0;
+        for (int moIndex = 0; moIndex < moCount; ++moIndex) {
+            SkOpSpan& moSpan = mOther->fTs[moIndex];
+            if (moSpan.fDone) {
+                continue;
+            }
+            if (moSpan.fOther == this) {
+                if (moSpan.fOtherT == match->fT) {
+                    moStart = moIndex;
+                    moStartT = moSpan.fT;
+                }
+                continue;
+            }
+            if (moSpan.fOther == tOther) {
+                if (tOther->windValueAt(moSpan.fOtherT) == 0) {
+                    moStart = -1;
+                    break;
+                }
+                SkASSERT(moEnd == -1);
+                moEnd = moIndex;
+                moEndT = moSpan.fT;
+            }
+        }
+        if (moStart < 0 || moEnd < 0) {
+            continue;
+        }
+        // FIXME: if moStartT, moEndT are initialized to NaN, can skip this test
+        if (approximately_equal(moStartT, moEndT)) {
+            continue;
+        }
+        int toStart = -1;
+        int toEnd = -1;
+        double toStartT = 0;
+        double toEndT = 0;
+        for (int toIndex = 0; toIndex < toCount; ++toIndex) {
+            SkOpSpan& toSpan = tOther->fTs[toIndex];
+            if (toSpan.fDone) {
+                continue;
+            }
+            if (toSpan.fOther == this) {
+                if (toSpan.fOtherT == test->fT) {
+                    toStart = toIndex;
+                    toStartT = toSpan.fT;
+                }
+                continue;
+            }
+            if (toSpan.fOther == mOther && toSpan.fOtherT == moEndT) {
+                if (mOther->windValueAt(toSpan.fOtherT) == 0) {
+                    moStart = -1;
+                    break;
+                }
+                SkASSERT(toEnd == -1);
+                toEnd = toIndex;
+                toEndT = toSpan.fT;
+            }
+        }
+        // FIXME: if toStartT, toEndT are initialized to NaN, can skip this test
+        if (toStart <= 0 || toEnd <= 0) {
+            continue;
+        }
+        if (approximately_equal(toStartT, toEndT)) {
+            continue;
+        }
+        // test to see if the segment between there and here is linear
+        if (!mOther->isLinear(moStart, moEnd)
+                || !tOther->isLinear(toStart, toEnd)) {
+            continue;
+        }
+        bool flipped = (moStart - moEnd) * (toStart - toEnd) < 1;
+        if (flipped) {
+            mOther->addTCancel(moStartT, moEndT, tOther, toEndT, toStartT);
+        } else {
+            mOther->addTCoincident(moStartT, moEndT, tOther, toStartT, toEndT);
         }
     }
-    SkASSERT(0);
-    return -1;
 }
 
 // FIXME: either:
@@ -1905,24 +1722,14 @@ SkOpSegment* SkOpSegment::findTop(int* tIndexPtr, int* endIndexPtr, bool* unsort
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle, true> angles;
     SkASSERT(firstT - end != 0);
     addTwoAngles(end, firstT, &angles);
-    if (!buildAngles(firstT, &angles, true) && onlySortable) {
-//        *unsortable = true;
-//        return NULL;
-    }
+    buildAngles(firstT, &angles, true);
     SkSTArray<SkOpAngle::kStackBasedCount, SkOpAngle*, true> sorted;
     bool sortable = SortAngles(angles, &sorted, SkOpSegment::kMayBeUnordered_SortAngleKind);
-    if (onlySortable && !sortable) {
-        *unsortable = true;
-        return NULL;
-    }
     int first = SK_MaxS32;
     SkScalar top = SK_ScalarMax;
     int count = sorted.count();
     for (int index = 0; index < count; ++index) {
         const SkOpAngle* angle = sorted[index];
-        if (onlySortable && angle->unorderable()) {
-            continue;
-        }
         SkOpSegment* next = angle->segment();
         SkPathOpsBounds bounds;
         next->subDivideBounds(angle->end(), angle->start(), &bounds);
@@ -1935,6 +1742,10 @@ SkOpSegment* SkOpSegment::findTop(int* tIndexPtr, int* endIndexPtr, bool* unsort
 #if DEBUG_SORT  // || DEBUG_SWAP_TOP
     sorted[first]->segment()->debugShowSort(__FUNCTION__, sorted, first, 0, 0, sortable);
 #endif
+    if (onlySortable && !sortable) {
+        *unsortable = true;
+        return NULL;
+    }
     // skip edges that have already been processed
     firstT = first - 1;
     SkOpSegment* leftSegment;
@@ -1978,7 +1789,6 @@ SkOpSegment* SkOpSegment::findTop(int* tIndexPtr, int* endIndexPtr, bool* unsort
 // while the following fixes the indices up again, it isn't smart about
 // skipping segments whose indices are already correct
 // assuming we leave the code that wrote the index in the first place
-// FIXME: if called after remove, this needs to correct tiny
 void SkOpSegment::fixOtherTIndex() {
     int iCount = fTs.count();
     for (int i = 0; i < iCount; ++i) {
@@ -2057,17 +1867,28 @@ void SkOpSegment::initWinding(int start, int end, double tHit, int winding, SkSc
         }
     }
     (void) markAndChaseWinding(start, end, winding, oppWind);
-    // OPTIMIZATION: the reverse mark and chase could skip the first marking
-    (void) markAndChaseWinding(end, start, winding, oppWind);
+}
+
+bool SkOpSegment::isLinear(int start, int end) const {
+    if (fVerb == SkPath::kLine_Verb) {
+        return true;
+    }
+    if (fVerb == SkPath::kQuad_Verb) {
+        SkDQuad qPart = SkDQuad::SubDivide(fPts, fTs[start].fT, fTs[end].fT);
+        return qPart.isLinear(0, 2);
+    } else {
+        SkASSERT(fVerb == SkPath::kCubic_Verb);
+        SkDCubic cPart = SkDCubic::SubDivide(fPts, fTs[start].fT, fTs[end].fT);
+        return cPart.isLinear(0, 3);
+    }
 }
 
 // OPTIMIZE: successive calls could start were the last leaves off
 // or calls could specialize to walk forwards or backwards
-bool SkOpSegment::isMissing(double startT, const SkPoint& pt) const {
+bool SkOpSegment::isMissing(double startT) const {
     size_t tCount = fTs.count();
     for (size_t index = 0; index < tCount; ++index) {
-        const SkOpSpan& span = fTs[index];
-        if (approximately_zero(startT - span.fT) && pt == span.fPt) {
+        if (approximately_zero(startT - fTs[index].fT)) {
             return false;
         }
     }
@@ -2089,57 +1910,34 @@ bool SkOpSegment::isSimple(int end) const {
     return false;
 }
 
-bool SkOpSegment::isTiny(const SkOpAngle* angle) const {
-    int start = angle->start();
-    int end = angle->end();
-    const SkOpSpan& mSpan = fTs[SkMin32(start, end)];
-    return mSpan.fTiny;
-}
-
-bool SkOpSegment::isTiny(int index) const {
-    return fTs[index].fTiny;
-}
-
-// look pair of active edges going away from coincident edge
-// one of them should be the continuation of other
-// if both are active, look to see if they both the connect to another coincident pair
-// if one at least one is a line, then make the pair coincident
-// if neither is a line, test for coincidence
-bool SkOpSegment::joinCoincidence(SkOpSegment* other, double otherT, int step,
-        bool cancel) {
-    int otherTIndex = other->findT(otherT, this);
-    int next = other->nextExactSpan(otherTIndex, step);
-    int otherMin = SkTMin(otherTIndex, next);
-    int otherWind = other->span(otherMin).fWindValue;
-    if (otherWind == 0) {
-        return false;
-    }
-    SkASSERT(next >= 0);
-    int tIndex = 0;
-    do {
-        SkOpSpan* test = &fTs[tIndex];
-        SkASSERT(test->fT == 0);
-        if (test->fOther == other || test->fOtherT != 1) {
-            continue;
-        }
-        SkPoint startPt, endPt;
-        double endT;
-        if (findCoincidentMatch(test, other, otherTIndex, next, step, &startPt, &endPt, &endT)) {
-            SkOpSegment* match = test->fOther;
-            if (cancel) {
-                match->addTCancel(startPt, endPt, other);
-            } else {
-                match->addTCoincident(startPt, endPt, endT, other);
-            }
-            return true;
-        }
-    } while (fTs[++tIndex].fT == 0);
-    return false;
-}
-
 // this span is excluded by the winding rule -- chase the ends
 // as long as they are unambiguous to mark connections as done
 // and give them the same winding value
+SkOpSpan* SkOpSegment::markAndChaseDone(int index, int endIndex, int winding) {
+    int step = SkSign32(endIndex - index);
+    int min = SkMin32(index, endIndex);
+    markDone(min, winding);
+    SkOpSpan* last;
+    SkOpSegment* other = this;
+    while ((other = other->nextChase(&index, step, &min, &last))) {
+        other->markDone(min, winding);
+    }
+    return last;
+}
+
+SkOpSpan* SkOpSegment::markAndChaseDoneBinary(const SkOpAngle* angle, int winding, int oppWinding) {
+    int index = angle->start();
+    int endIndex = angle->end();
+    int step = SkSign32(endIndex - index);
+    int min = SkMin32(index, endIndex);
+    markDoneBinary(min, winding, oppWinding);
+    SkOpSpan* last;
+    SkOpSegment* other = this;
+    while ((other = other->nextChase(&index, step, &min, &last))) {
+        other->markDoneBinary(min, winding, oppWinding);
+    }
+    return last;
+}
 
 SkOpSpan* SkOpSegment::markAndChaseDoneBinary(int index, int endIndex) {
     int step = SkSign32(endIndex - index);
@@ -2169,6 +1967,12 @@ SkOpSpan* SkOpSegment::markAndChaseDoneUnary(int index, int endIndex) {
         other->markDoneUnary(min);
     }
     return last;
+}
+
+SkOpSpan* SkOpSegment::markAndChaseDoneUnary(const SkOpAngle* angle, int winding) {
+    int index = angle->start();
+    int endIndex = angle->end();
+    return markAndChaseDone(index, endIndex, winding);
 }
 
 SkOpSpan* SkOpSegment::markAndChaseWinding(const SkOpAngle* angle, const int winding) {
@@ -2211,25 +2015,23 @@ SkOpSpan* SkOpSegment::markAndChaseWinding(const SkOpAngle* angle, int winding, 
     return markAndChaseWinding(start, end, winding, oppWinding);
 }
 
-SkOpSpan* SkOpSegment::markAngle(int maxWinding, int sumWinding, const SkOpAngle* angle) {
+SkOpSpan* SkOpSegment::markAngle(int maxWinding, int sumWinding, bool activeAngle,
+                                const SkOpAngle* angle) {
     SkASSERT(angle->segment() == this);
     if (UseInnerWinding(maxWinding, sumWinding)) {
         maxWinding = sumWinding;
     }
-    SkOpSpan* last = markAndChaseWinding(angle, maxWinding);
-#if DEBUG_WINDING
-    if (last) {
-        SkDebugf("%s last id=%d windSum=", __FUNCTION__,
-                last->fOther->fTs[last->fOtherIndex].fOther->debugID());
-        SkPathOpsDebug::WindingPrintf(last->fWindSum);
-        SkDebugf(" small=%d\n", last->fSmall);
+    SkOpSpan* last;
+    if (activeAngle) {
+        last = markAndChaseWinding(angle, maxWinding);
+    } else {
+        last = markAndChaseDoneUnary(angle, maxWinding);
     }
-#endif
     return last;
 }
 
 SkOpSpan* SkOpSegment::markAngle(int maxWinding, int sumWinding, int oppMaxWinding,
-                                 int oppSumWinding, const SkOpAngle* angle) {
+                                 int oppSumWinding, bool activeAngle, const SkOpAngle* angle) {
     SkASSERT(angle->segment() == this);
     if (UseInnerWinding(maxWinding, sumWinding)) {
         maxWinding = sumWinding;
@@ -2237,15 +2039,12 @@ SkOpSpan* SkOpSegment::markAngle(int maxWinding, int sumWinding, int oppMaxWindi
     if (oppMaxWinding != oppSumWinding && UseInnerWinding(oppMaxWinding, oppSumWinding)) {
         oppMaxWinding = oppSumWinding;
     }
-    SkOpSpan* last = markAndChaseWinding(angle, maxWinding, oppMaxWinding);
-#if DEBUG_WINDING
-    if (last) {
-        SkDebugf("%s last id=%d windSum=", __FUNCTION__,
-                last->fOther->fTs[last->fOtherIndex].fOther->debugID());
-        SkPathOpsDebug::WindingPrintf(last->fWindSum);
-        SkDebugf(" small=%d\n", last->fSmall);
+    SkOpSpan* last;
+    if (activeAngle) {
+        last = markAndChaseWinding(angle, maxWinding, oppMaxWinding);
+    } else {
+        last = markAndChaseDoneBinary(angle, maxWinding, oppMaxWinding);
     }
-#endif
     return last;
 }
 
@@ -2264,6 +2063,19 @@ void SkOpSegment::markDone(int index, int winding) {
     }
     do {
         markOneDone(__FUNCTION__, index, winding);
+    } while (++index < fTs.count() && precisely_negative(fTs[index].fT - referenceT));
+}
+
+void SkOpSegment::markDoneBinary(int index, int winding, int oppWinding) {
+  //  SkASSERT(!done());
+    SkASSERT(winding || oppWinding);
+    double referenceT = fTs[index].fT;
+    int lesser = index;
+    while (--lesser >= 0 && precisely_negative(referenceT - fTs[lesser].fT)) {
+        markOneDoneBinary(__FUNCTION__, lesser, winding, oppWinding);
+    }
+    do {
+        markOneDoneBinary(__FUNCTION__, index, winding, oppWinding);
     } while (++index < fTs.count() && precisely_negative(fTs[index].fT - referenceT));
 }
 
@@ -2307,6 +2119,15 @@ void SkOpSegment::markOneDoneBinary(const char* funName, int tIndex) {
     fDoneSpans++;
 }
 
+void SkOpSegment::markOneDoneBinary(const char* funName, int tIndex, int winding, int oppWinding) {
+    SkOpSpan* span = markOneWinding(funName, tIndex, winding, oppWinding);
+    if (!span) {
+        return;
+    }
+    span->fDone = true;
+    fDoneSpans++;
+}
+
 void SkOpSegment::markOneDoneUnary(const char* funName, int tIndex) {
     SkOpSpan* span = verifyOneWindingU(funName, tIndex);
     if (!span) {
@@ -2325,7 +2146,9 @@ SkOpSpan* SkOpSegment::markOneWinding(const char* funName, int tIndex, int windi
     debugShowNewWinding(funName, span, winding);
 #endif
     SkASSERT(span.fWindSum == SK_MinS32 || span.fWindSum == winding);
-    SkASSERT(abs(winding) <= SkPathOpsDebug::gMaxWindSum);
+#ifdef SK_DEBUG
+    SkASSERT(abs(winding) <= gDebugMaxWindSum);
+#endif
     span.fWindSum = winding;
     return &span;
 }
@@ -2333,17 +2156,21 @@ SkOpSpan* SkOpSegment::markOneWinding(const char* funName, int tIndex, int windi
 SkOpSpan* SkOpSegment::markOneWinding(const char* funName, int tIndex, int winding,
                                       int oppWinding) {
     SkOpSpan& span = fTs[tIndex];
-    if (span.fDone && !span.fSmall) {
+    if (span.fDone) {
         return NULL;
     }
 #if DEBUG_MARK_DONE
     debugShowNewWinding(funName, span, winding, oppWinding);
 #endif
     SkASSERT(span.fWindSum == SK_MinS32 || span.fWindSum == winding);
-    SkASSERT(abs(winding) <= SkPathOpsDebug::gMaxWindSum);
+#ifdef SK_DEBUG
+    SkASSERT(abs(winding) <= gDebugMaxWindSum);
+#endif
     span.fWindSum = winding;
     SkASSERT(span.fOppSum == SK_MinS32 || span.fOppSum == oppWinding);
-    SkASSERT(abs(oppWinding) <= SkPathOpsDebug::gMaxWindSum);
+#ifdef SK_DEBUG
+    SkASSERT(abs(oppWinding) <= gDebugMaxWindSum);
+#endif
     span.fOppSum = oppWinding;
     return &span;
 }
@@ -2403,12 +2230,8 @@ SkOpSpan* SkOpSegment::verifyOneWinding(const char* funName, int tIndex) {
 #if DEBUG_MARK_DONE
     debugShowNewWinding(funName, span, span.fWindSum, span.fOppSum);
 #endif
-// If the prior angle in the sort is unorderable, the winding sum may not be computable.
-// To enable the assert, the 'prior is unorderable' state could be
-// piped down to this test, but not sure it's worth it.
-// (Once the sort order is stored in the span, this test may be feasible.)
-//    SkASSERT(span.fWindSum != SK_MinS32);
-//    SkASSERT(span.fOppSum != SK_MinS32);
+    SkASSERT(span.fWindSum != SK_MinS32);
+    SkASSERT(span.fOppSum != SK_MinS32);
     return &span;
 }
 
@@ -2420,11 +2243,7 @@ SkOpSpan* SkOpSegment::verifyOneWindingU(const char* funName, int tIndex) {
 #if DEBUG_MARK_DONE
     debugShowNewWinding(funName, span, span.fWindSum);
 #endif
-// If the prior angle in the sort is unorderable, the winding sum may not be computable.
-// To enable the assert, the 'prior is unorderable' state could be
-// piped down to this test, but not sure it's worth it.
-// (Once the sort order is stored in the span, this test may be feasible.)
-//    SkASSERT(span.fWindSum != SK_MinS32);
+    SkASSERT(span.fWindSum != SK_MinS32);
     return &span;
 }
 
@@ -2536,10 +2355,6 @@ bool SkOpSegment::nextCandidate(int* start, int* end) const {
 SkOpSegment* SkOpSegment::nextChase(int* index, const int step, int* min, SkOpSpan** last) {
     int end = nextExactSpan(*index, step);
     SkASSERT(end >= 0);
-    if (fTs[end].fSmall) {
-        *last = NULL;
-        return NULL;
-    }
     if (multipleSpans(end)) {
         *last = &fTs[end];
         return NULL;
@@ -2551,7 +2366,7 @@ SkOpSegment* SkOpSegment::nextChase(int* index, const int step, int* min, SkOpSp
     int otherEnd = other->nextExactSpan(*index, step);
     SkASSERT(otherEnd >= 0);
     *min = SkMin32(*index, otherEnd);
-    if (other->fTs[*min].fSmall) {
+    if (other->fTs[*min].fTiny) {
         *last = NULL;
         return NULL;
     }
@@ -2582,30 +2397,18 @@ int SkOpSegment::nextSpan(int from, int step) const {
 // FIXME
 // this returns at any difference in T, vs. a preset minimum. It may be
 // that all callers to nextSpan should use this instead.
+// OPTIMIZATION splitting this into separate loops for up/down steps
+// would allow using precisely_negative instead of precisely_zero
 int SkOpSegment::nextExactSpan(int from, int step) const {
+    const SkOpSpan& fromSpan = fTs[from];
+    int count = fTs.count();
     int to = from;
-    if (step < 0) {
-        const SkOpSpan& fromSpan = fTs[from];
-        while (--to >= 0) {
-            const SkOpSpan& span = fTs[to];
-            if (precisely_negative(fromSpan.fT - span.fT) || span.fTiny) {
-                continue;
-            }
-            return to;
+    while (step > 0 ? ++to < count : --to >= 0) {
+        const SkOpSpan& span = fTs[to];
+        if (precisely_zero(span.fT - fromSpan.fT)) {
+            continue;
         }
-    } else {
-        while (fTs[from].fTiny) {
-            from++;
-        }
-        const SkOpSpan& fromSpan = fTs[from];
-        int count = fTs.count();
-        while (++to < count) {
-            const SkOpSpan& span = fTs[to];
-            if (precisely_negative(span.fT - fromSpan.fT)) {
-                continue;
-            }
-            return to;
-        }
+        return to;
     }
     return -1;
 }
@@ -2625,16 +2428,6 @@ void SkOpSegment::setUpWindings(int index, int endIndex, int* sumMiWinding, int*
         *oppMaxWinding = *sumSuWinding;
         *oppSumWinding = *sumSuWinding -= oppDeltaSum;
     }
-    SkASSERT(abs(*sumWinding) <= SkPathOpsDebug::gMaxWindSum);
-    SkASSERT(abs(*oppSumWinding) <= SkPathOpsDebug::gMaxWindSum);
-}
-
-void SkOpSegment::setUpWindings(int index, int endIndex, int* sumMiWinding,
-        int* maxWinding, int* sumWinding) {
-    int deltaSum = spanSign(index, endIndex);
-    *maxWinding = *sumMiWinding;
-    *sumWinding = *sumMiWinding -= deltaSum;
-    SkASSERT(abs(*sumWinding) <= SkPathOpsDebug::gMaxWindSum);
 }
 
 // This marks all spans unsortable so that this info is available for early
@@ -2647,6 +2440,8 @@ bool SkOpSegment::SortAngles(const SkTArray<SkOpAngle, true>& angles,
     bool sortable = true;
     int angleCount = angles.count();
     int angleIndex;
+// FIXME: caller needs to use SkTArray constructor with reserve count
+//    angleList->setReserve(angleCount);
     for (angleIndex = 0; angleIndex < angleCount; ++angleIndex) {
         const SkOpAngle& angle = angles[angleIndex];
         angleList->push_back(const_cast<SkOpAngle*>(&angle));
@@ -2673,34 +2468,6 @@ bool SkOpSegment::SortAngles(const SkTArray<SkOpAngle, true>& angles,
         }
     }
     return sortable;
-}
-
-// set segments to unsortable if angle is unsortable, but do not set all angles
-// note that for a simple 4 way crossing, two of the edges may be orderable even though
-// two edges are too short to be orderable.
-// perhaps some classes of unsortable angles should make all shared angles unsortable, but
-// simple lines that have tiny crossings are always sortable on the large ends
-// OPTIMIZATION: check earlier when angles are added to input if any are unsortable
-// may make sense then to mark all segments in angle sweep as unsortableStart/unsortableEnd
-// solely for the purpose of short-circuiting future angle building around this center
-bool SkOpSegment::SortAngles2(const SkTArray<SkOpAngle, true>& angles,
-                              SkTArray<SkOpAngle*, true>* angleList) {
-    int angleCount = angles.count();
-    int angleIndex;
-    for (angleIndex = 0; angleIndex < angleCount; ++angleIndex) {
-        const SkOpAngle& angle = angles[angleIndex];
-        if (angle.unsortable()) {
-            return false;
-        }
-        angleList->push_back(const_cast<SkOpAngle*>(&angle));
-#if DEBUG_ANGLE
-        (*(angleList->end() - 1))->setID(angleIndex);
-#endif
-    }
-    SkTQSort<SkOpAngle>(angleList->begin(), angleList->end() - 1);
-    // at this point angles are sorted but individually may not be orderable
-    // this means that only adjcent orderable segments may transfer winding
-    return true;
 }
 
 // return true if midpoints were computed
@@ -2785,19 +2552,22 @@ void SkOpSegment::subDivideBounds(int start, int end, SkPathOpsBounds* bounds) c
     (bounds->*SetCurveBounds[SkPathOpsVerbToPoints(fVerb)])(edge);
 }
 
-void SkOpSegment::TrackOutsidePair(SkTArray<SkPoint, true>* outsidePts, const SkPoint& endPt,
-        const SkPoint& startPt) {
-    int outCount = outsidePts->count();
-    if (outCount == 0 || endPt != (*outsidePts)[outCount - 2]) {
-        outsidePts->push_back(endPt);
-        outsidePts->push_back(startPt);
-    }
+bool SkOpSegment::isTiny(const SkOpAngle* angle) const {
+    int start = angle->start();
+    int end = angle->end();
+    const SkOpSpan& mSpan = fTs[SkMin32(start, end)];
+    return mSpan.fTiny;
 }
 
-void SkOpSegment::TrackOutside(SkTArray<SkPoint, true>* outsidePts, const SkPoint& startPt) {
-    int outCount = outsidePts->count();
-    if (outCount == 0 || startPt != (*outsidePts)[outCount - 1]) {
-        outsidePts->push_back(startPt);
+bool SkOpSegment::isTiny(int index) const {
+    return fTs[index].fTiny;
+}
+
+void SkOpSegment::TrackOutside(SkTArray<double, true>* outsideTs, double end, double start) {
+    int outCount = outsideTs->count();
+    if (outCount == 0 || !approximately_negative(end - (*outsideTs)[outCount - 2])) {
+        outsideTs->push_back(end);
+        outsideTs->push_back(start);
     }
 }
 
@@ -2845,8 +2615,7 @@ int SkOpSegment::updateWinding(int index, int endIndex) const {
     int lesser = SkMin32(index, endIndex);
     int winding = windSum(lesser);
     int spanWinding = spanSign(index, endIndex);
-    if (winding && UseInnerWinding(winding - spanWinding, winding)
-            && winding != SK_MaxS32) {
+    if (winding && UseInnerWinding(winding - spanWinding, winding) && winding != SK_MaxS32) {
         winding -= spanWinding;
     }
     return winding;
@@ -2858,42 +2627,10 @@ int SkOpSegment::updateWinding(const SkOpAngle* angle) const {
     return updateWinding(endIndex, startIndex);
 }
 
-int SkOpSegment::updateWindingReverse(int index, int endIndex) const {
-    int lesser = SkMin32(index, endIndex);
-    int winding = windSum(lesser);
-    int spanWinding = spanSign(endIndex, index);
-    if (winding && UseInnerWindingReverse(winding - spanWinding, winding)
-            && winding != SK_MaxS32) {
-        winding -= spanWinding;
-    }
-    return winding;
-}
-
 int SkOpSegment::updateWindingReverse(const SkOpAngle* angle) const {
     int startIndex = angle->start();
     int endIndex = angle->end();
-    return updateWindingReverse(endIndex, startIndex);
-}
-
-// OPTIMIZATION: does the following also work, and is it any faster?
-// return outerWinding * innerWinding > 0
-//      || ((outerWinding + innerWinding < 0) ^ ((outerWinding - innerWinding) < 0)))
-bool SkOpSegment::UseInnerWinding(int outerWinding, int innerWinding) {
-    SkASSERT(outerWinding != SK_MaxS32);
-    SkASSERT(innerWinding != SK_MaxS32);
-    int absOut = abs(outerWinding);
-    int absIn = abs(innerWinding);
-    bool result = absOut == absIn ? outerWinding < 0 : absOut < absIn;
-    return result;
-}
-
-bool SkOpSegment::UseInnerWindingReverse(int outerWinding, int innerWinding) {
-    SkASSERT(outerWinding != SK_MaxS32);
-    SkASSERT(innerWinding != SK_MaxS32);
-    int absOut = abs(outerWinding);
-    int absIn = abs(innerWinding);
-    bool result = absOut == absIn ? true : absOut < absIn;
-    return result;
+    return updateWinding(startIndex, endIndex);
 }
 
 int SkOpSegment::windingAtT(double tHit, int tIndex, bool crossOpp, SkScalar* dx) const {
@@ -2936,13 +2673,28 @@ int SkOpSegment::windSum(const SkOpAngle* angle) const {
     return windSum(index);
 }
 
+int SkOpSegment::windValue(const SkOpAngle* angle) const {
+    int start = angle->start();
+    int end = angle->end();
+    int index = SkMin32(start, end);
+    return windValue(index);
+}
+
+int SkOpSegment::windValueAt(double t) const {
+    int count = fTs.count();
+    for (int index = 0; index < count; ++index) {
+        if (fTs[index].fT == t) {
+            return fTs[index].fWindValue;
+        }
+    }
+    SkASSERT(0);
+    return 0;
+}
+
 void SkOpSegment::zeroSpan(SkOpSpan* span) {
     SkASSERT(span->fWindValue > 0 || span->fOppValue != 0);
     span->fWindValue = 0;
     span->fOppValue = 0;
-    if (span->fTiny || span->fSmall) {
-        return;
-    }
     SkASSERT(!span->fDone);
     span->fDone = true;
     ++fDoneSpans;
@@ -2971,8 +2723,8 @@ void SkOpSegment::debugAddTPair(double t, const SkOpSegment& other, double other
 #endif
 
 #if DEBUG_CONCIDENT
-void SkOpSegment::debugShowTs(const char* prefix) const {
-    SkDebugf("%s %s id=%d", __FUNCTION__, prefix, fID);
+void SkOpSegment::debugShowTs() const {
+    SkDebugf("%s id=%d", __FUNCTION__, fID);
     int lastWind = -1;
     int lastOpp = -1;
     double lastT = -1;
@@ -3109,16 +2861,8 @@ void SkOpSegment::debugShowNewWinding(const char* fun, const SkOpSpan& span, int
 void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true>& angles,
                                 int first, const int contourWinding,
                                 const int oppContourWinding, bool sortable) const {
-    if (--SkPathOpsDebug::gSortCount < 0) {
+    if (--gDebugSortCount < 0) {
         return;
-    }
-    if (!sortable) {
-        if (angles.count() == 0) {
-            return;
-        }
-        if (first < 0) {
-            first = 0;
-        }
     }
     SkASSERT(angles[first]->segment() == this);
     SkASSERT(!sortable || angles.count() > 1);
@@ -3128,9 +2872,8 @@ void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true
     int windSum = lastSum - spanSign(firstAngle);
     int oppoSign = oppSign(firstAngle);
     int oppWindSum = oppLastSum - oppoSign;
-    #define WIND_AS_STRING(x) char x##Str[12]; \
-            if (!SkPathOpsDebug::ValidWind(x)) strcpy(x##Str, "?"); \
-            else SK_SNPRINTF(x##Str, sizeof(x##Str), "%d", x)
+    #define WIND_AS_STRING(x) char x##Str[12]; if (!valid_wind(x)) strcpy(x##Str, "?"); \
+        else SK_SNPRINTF(x##Str, sizeof(x##Str), "%d", x)
     WIND_AS_STRING(contourWinding);
     WIND_AS_STRING(oppContourWinding);
     SkDebugf("%s %s contourWinding=%s oppContourWinding=%s sign=%d\n", fun, __FUNCTION__,
@@ -3188,7 +2931,7 @@ void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true
         SkDebugf(" tStart=%1.9g tEnd=%1.9g", sSpan.fT, eSpan.fT);
     #endif
         SkDebugf(" sign=%d windValue=%d windSum=", angle.sign(), mSpan.fWindValue);
-        SkPathOpsDebug::WindingPrintf(mSpan.fWindSum);
+        winding_printf(mSpan.fWindSum);
         int last, wind;
         if (opp) {
             last = oppLastSum;
@@ -3197,8 +2940,7 @@ void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true
             last = lastSum;
             wind = windSum;
         }
-        bool useInner = SkPathOpsDebug::ValidWind(last) && SkPathOpsDebug::ValidWind(wind)
-                && UseInnerWinding(last, wind);
+        bool useInner = valid_wind(last) && valid_wind(wind) && UseInnerWinding(last, wind);
         WIND_AS_STRING(last);
         WIND_AS_STRING(wind);
         WIND_AS_STRING(lastSum);
@@ -3212,8 +2954,10 @@ void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true
             SkDebugf(" %s->%s (%s->%s)", lastStr, windStr, opp ? lastSumStr : oppLastSumStr,
                     opp ? windSumStr : oppWindSumStr);
         }
-        SkDebugf(" done=%d unord=%d small=%d tiny=%d opp=%d\n",
-                mSpan.fDone, angle.unorderable(), mSpan.fSmall, mSpan.fTiny, opp);
+        SkDebugf(" done=%d tiny=%d opp=%d\n", mSpan.fDone, mSpan.fTiny, opp);
+#if 0 && DEBUG_ANGLE
+        angle.debugShow(segment.xyAtT(&sSpan));
+#endif
         ++index;
         if (index == angles.count()) {
             index = 0;
@@ -3226,14 +2970,6 @@ void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true
 
 void SkOpSegment::debugShowSort(const char* fun, const SkTArray<SkOpAngle*, true>& angles,
                                 int first, bool sortable) {
-    if (!sortable) {
-        if (angles.count() == 0) {
-            return;
-        }
-        if (first < 0) {
-            first = 0;
-        }
-    }
     const SkOpAngle* firstAngle = angles[first];
     const SkOpSegment* segment = firstAngle->segment();
     int winding = segment->updateWinding(firstAngle);
@@ -3289,40 +3025,3 @@ void SkOpSegment::debugValidate() const {
     SkASSERT(done == fDoneSpans);
 #endif
 }
-
-#ifdef SK_DEBUG
-void SkOpSegment::dumpPts() const {
-    int last = SkPathOpsVerbToPoints(fVerb);
-    SkDebugf("{{");
-    int index = 0;
-    do {
-        SkDPoint::dump(fPts[index]);
-        SkDebugf(", ");
-    } while (++index < last);
-    SkDPoint::dump(fPts[index]);
-    SkDebugf("}}\n");
-}
-
-void SkOpSegment::dumpDPts() const {
-    int count = SkPathOpsVerbToPoints(fVerb);
-    SkDebugf("{{");
-    int index = 0;
-    do {
-        SkDPoint dPt = {fPts[index].fX, fPts[index].fY};
-        dPt.dump();
-        if (index != count) {
-            SkDebugf(", ");
-        }
-    } while (++index <= count);
-    SkDebugf("}}\n");
-}
-
-void SkOpSegment::dumpSpans() const {
-    int count = this->count();
-    for (int index = 0; index < count; ++index) {
-        const SkOpSpan& span = this->span(index);
-        SkDebugf("[%d] ", index);
-        span.dump();
-    }
-}
-#endif

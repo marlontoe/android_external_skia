@@ -24,11 +24,11 @@ enum SurfaceType {
 };
 
 static SkSurface* createSurface(SurfaceType surfaceType, GrContext* context) {
-    static const SkImageInfo imageSpec = {
+    static const SkImage::Info imageSpec = {
         10,  // width
         10,  // height
-        kPMColor_SkColorType,
-        kPremul_SkAlphaType
+        SkImage::kPMColor_ColorType,
+        SkImage::kPremul_AlphaType
     };
 
     switch (surfaceType) {
@@ -84,7 +84,6 @@ static void TestSurfaceCopyOnWrite(skiatest::Reporter* reporter, SurfaceType sur
     SkBitmap testBitmap;
     testBitmap.setConfig(SkBitmap::kARGB_8888_Config, 10, 10);
     testBitmap.allocPixels();
-    testBitmap.eraseColor(0);
 
     SkRRect testRRect;
     testRRect.setRectXY(testRect, SK_Scalar1, SK_Scalar1);
@@ -210,22 +209,22 @@ static void TestSurfaceNoCanvas(skiatest::Reporter* reporter,
         SkSurface* surface = createSurface(surfaceType, context);
         SkAutoTUnref<SkSurface> aur_surface(surface);
         surface->notifyContentWillChange(mode);
-        SkDEBUGCODE(surface->validate();)
+        surface->validate();
     }
     {
         SkSurface* surface = createSurface(surfaceType, context);
         SkAutoTUnref<SkSurface> aur_surface(surface);
         SkImage* image1 = surface->newImageSnapshot();
         SkAutoTUnref<SkImage> aur_image1(image1);
-        SkDEBUGCODE(image1->validate();)
-        SkDEBUGCODE(surface->validate();)
+        image1->validate();
+        surface->validate();
         surface->notifyContentWillChange(mode);
-        SkDEBUGCODE(image1->validate();)
-        SkDEBUGCODE(surface->validate();)
+        image1->validate();
+        surface->validate();
         SkImage* image2 = surface->newImageSnapshot();
         SkAutoTUnref<SkImage> aur_image2(image2);
-        SkDEBUGCODE(image2->validate();)
-        SkDEBUGCODE(surface->validate();)
+        image2->validate();
+        surface->validate();
         REPORTER_ASSERT(reporter, image1 != image2);
     }
 
@@ -243,14 +242,12 @@ static void TestSurface(skiatest::Reporter* reporter, GrContextFactory* factory)
     TestGetTexture(reporter, kPicture_SurfaceType, NULL);
     if (NULL != factory) {
         GrContext* context = factory->get(GrContextFactory::kNative_GLContextType);
-        if (NULL != context) {
-            Test_crbug263329(reporter, context);
-            TestSurfaceCopyOnWrite(reporter, kGpu_SurfaceType, context);
-            TestSurfaceWritableAfterSnapshotRelease(reporter, kGpu_SurfaceType, context);
-            TestSurfaceNoCanvas(reporter, kGpu_SurfaceType, context, SkSurface::kDiscard_ContentChangeMode);
-            TestSurfaceNoCanvas(reporter, kGpu_SurfaceType, context, SkSurface::kRetain_ContentChangeMode);
-            TestGetTexture(reporter, kGpu_SurfaceType, context);
-        }
+        Test_crbug263329(reporter, context);
+        TestSurfaceCopyOnWrite(reporter, kGpu_SurfaceType, context);
+        TestSurfaceWritableAfterSnapshotRelease(reporter, kGpu_SurfaceType, context);
+        TestSurfaceNoCanvas(reporter, kGpu_SurfaceType, context, SkSurface::kDiscard_ContentChangeMode);
+        TestSurfaceNoCanvas(reporter, kGpu_SurfaceType, context, SkSurface::kRetain_ContentChangeMode);
+        TestGetTexture(reporter, kGpu_SurfaceType, context);
     }
 #endif
 }

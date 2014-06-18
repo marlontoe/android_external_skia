@@ -52,7 +52,7 @@ bool SkGrDescKey::lt(const GrKey& rh) const {
     const SkDescriptor* srcDesc = ((const SkGrDescKey*)&rh)->fDesc;
     size_t lenLH = fDesc->getLength();
     size_t lenRH = srcDesc->getLength();
-    int cmp = memcmp(fDesc, srcDesc, SkTMin<size_t>(lenLH, lenRH));
+    int cmp = memcmp(fDesc, srcDesc, SkMin32(lenLH, lenRH));
     if (0 == cmp) {
         return lenLH < lenRH;
     } else {
@@ -73,7 +73,7 @@ SkGrFontScaler::SkGrFontScaler(SkGlyphCache* strike) {
 }
 
 SkGrFontScaler::~SkGrFontScaler() {
-    SkSafeUnref(fKey);
+    GrSafeUnref(fKey);
 }
 
 GrMaskFormat SkGrFontScaler::getMaskFormat() {
@@ -87,10 +87,8 @@ GrMaskFormat SkGrFontScaler::getMaskFormat() {
             return kA565_GrMaskFormat;
         case SkMask::kLCD32_Format:
             return kA888_GrMaskFormat;
-        case SkMask::kARGB32_Format:
-            return kARGB_GrMaskFormat;
         default:
-            SkDEBUGFAIL("unsupported SkMask::Format");
+            GrAssert(!"unsupported SkMask::Format");
             return kA8_GrMaskFormat;
     }
 }
@@ -144,8 +142,8 @@ bool SkGrFontScaler::getPackedGlyphImage(GrGlyph::PackedID packed,
     const SkGlyph& glyph = fStrike->getGlyphIDMetrics(GrGlyph::UnpackID(packed),
                                               GrGlyph::UnpackFixedX(packed),
                                               GrGlyph::UnpackFixedY(packed));
-    SkASSERT(glyph.fWidth == width);
-    SkASSERT(glyph.fHeight == height);
+    GrAssert(glyph.fWidth == width);
+    GrAssert(glyph.fHeight == height);
     const void* src = fStrike->findImage(glyph);
     if (NULL == src) {
         return false;
@@ -174,8 +172,8 @@ bool SkGrFontScaler::getPackedGlyphImage(GrGlyph::PackedID packed,
                 expand_bits(rgba8888, bits, width, height, dstRB, srcRB);
                 break;
             }
-            default:
-                GrCrash("Invalid GrMaskFormat");
+           default:
+             GrCrash("Unknown GrMaskFormat");
         }
     } else if (srcRB == dstRB) {
         memcpy(dst, src, dstRB * height);

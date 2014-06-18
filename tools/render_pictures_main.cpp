@@ -32,8 +32,6 @@ DECLARE_string(readPath);
 DEFINE_bool(writeEncodedImages, false, "Any time the skp contains an encoded image, write it to a "
             "file rather than decoding it. Requires writePath to be set. Skips drawing the full "
             "skp to a file. Not compatible with deferImageDecoding.");
-DEFINE_string(writeJsonSummaryPath, "", "File to write a JSON summary of image results to. "
-              "TODO(epoger): Currently, this only works if --writePath is also specified.");
 DEFINE_string2(writePath, w, "", "Directory to write the rendered images.");
 DEFINE_bool(writeWholeImage, false, "In tile mode, write the entire rendered image to a "
             "file, instead of an image for each tile.");
@@ -134,12 +132,9 @@ static bool write_image_to_file(const void* buffer, size_t size, SkBitmap* bitma
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/**
- * Called only by render_picture().
- */
-static bool render_picture_internal(const SkString& inputPath, const SkString* outputDir,
-                                    sk_tools::PictureRenderer& renderer,
-                                    SkBitmap** out) {
+static bool render_picture(const SkString& inputPath, const SkString* outputDir,
+                           sk_tools::PictureRenderer& renderer,
+                           SkBitmap** out) {
     SkString inputFilename;
     sk_tools::get_basename(&inputFilename, inputPath);
 
@@ -246,21 +241,11 @@ private:
 };
 }
 
-/**
- * Render the SKP file(s) within inputPath, writing their bitmap images into outputDir.
- *
- * @param inputPath path to an individual SKP file, or a directory of SKP files
- * @param outputDir if not NULL, write the image(s) generated into this directory
- * @param renderer PictureRenderer to use to render the SKPs
- * @param jsonSummaryPtr if not NULL, add the image(s) generated to this summary
- */
 static bool render_picture(const SkString& inputPath, const SkString* outputDir,
-                           sk_tools::PictureRenderer& renderer,
-                           sk_tools::ImageResultsSummary *jsonSummaryPtr) {
+                           sk_tools::PictureRenderer& renderer) {
     int diffs[256] = {0};
     SkBitmap* bitmap = NULL;
-    renderer.setJsonSummaryPtr(jsonSummaryPtr);
-    bool success = render_picture_internal(inputPath,
+    bool success = render_picture(inputPath,
         FLAGS_writeWholeImage ? NULL : outputDir,
         renderer,
         FLAGS_validate || FLAGS_writeWholeImage ? &bitmap : NULL);
@@ -287,8 +272,8 @@ static bool render_picture(const SkString& inputPath, const SkString* outputDir,
         }
         SkAutoTUnref<sk_tools::PictureRenderer> aurReferenceRenderer(referenceRenderer);
 
-        success = render_picture_internal(inputPath, NULL, *referenceRenderer,
-                                          &referenceBitmap);
+        success = render_picture(inputPath, NULL, *referenceRenderer,
+                                 &referenceBitmap);
 
         if (!success || NULL == referenceBitmap || NULL == referenceBitmap->getPixels()) {
             SkDebugf("Failed to draw the reference picture.\n");
@@ -342,24 +327,7 @@ static bool render_picture(const SkString& inputPath, const SkString* outputDir,
 
     if (FLAGS_writeWholeImage) {
         sk_tools::force_all_opaque(*bitmap);
-
-        if (NULL != jsonSummaryPtr) {
-            // EPOGER: This is a hacky way of constructing the filename associated with the
-            // image checksum; we basically are repeating the logic of make_output_filepath()
-            // and code below here, within here.
-            // It would be better for the filename (without outputDir) to be passed in here,
-            // and used both for the checksum file and writing into outputDir.
-            //
-            // EPOGER: what about including the config type within hashFilename?  That way,
-            // we could combine results of different config types without conflicting filenames.
-            SkString hashFilename;
-            sk_tools::get_basename(&hashFilename, inputPath);
-            hashFilename.remove(hashFilename.size() - 4, 4); // Remove ".skp"
-            hashFilename.append(".png");
-            jsonSummaryPtr->add(hashFilename.c_str(), *bitmap);
-        }
-
-        if (NULL != outputDir) {
+        if (NULL != outputDir && FLAGS_writeWholeImage) {
             SkString inputFilename;
             sk_tools::get_basename(&inputFilename, inputPath);
             SkString outputPath;
@@ -379,8 +347,7 @@ static bool render_picture(const SkString& inputPath, const SkString* outputDir,
 
 
 static int process_input(const char* input, const SkString* outputDir,
-                         sk_tools::PictureRenderer& renderer,
-                         sk_tools::ImageResultsSummary *jsonSummaryPtr) {
+                         sk_tools::PictureRenderer& renderer) {
     SkOSFile::Iter iter(input, "skp");
     SkString inputFilename;
     int failures = 0;
@@ -390,13 +357,13 @@ static int process_input(const char* input, const SkString* outputDir,
             SkString inputPath;
             SkString inputAsSkString(input);
             sk_tools::make_filepath(&inputPath, inputAsSkString, inputFilename);
-            if (!render_picture(inputPath, outputDir, renderer, jsonSummaryPtr)) {
+            if (!render_picture(inputPath, outputDir, renderer)) {
                 ++failures;
             }
         } while(iter.next(&inputFilename));
     } else if (SkStrEndsWith(input, ".skp")) {
         SkString inputPath(input);
-        if (!render_picture(inputPath, outputDir, renderer, jsonSummaryPtr)) {
+        if (!render_picture(inputPath, outputDir, renderer)) {
             ++failures;
         }
     } else {
@@ -460,15 +427,10 @@ int tool_main(int argc, char** argv) {
     if (FLAGS_writePath.count() == 1) {
         outputDir.set(FLAGS_writePath[0]);
     }
-    sk_tools::ImageResultsSummary jsonSummary;
-    sk_tools::ImageResultsSummary* jsonSummaryPtr = NULL;
-    if (FLAGS_writeJsonSummaryPath.count() == 1) {
-        jsonSummaryPtr = &jsonSummary;
-    }
 
     int failures = 0;
     for (int i = 0; i < FLAGS_readPath.count(); i ++) {
-        failures += process_input(FLAGS_readPath[i], &outputDir, *renderer.get(), jsonSummaryPtr);
+        failures += process_input(FLAGS_readPath[i], &outputDir, *renderer.get());
     }
     if (failures != 0) {
         SkDebugf("Failed to render %i pictures.\n", failures);
@@ -478,16 +440,11 @@ int tool_main(int argc, char** argv) {
 #if GR_CACHE_STATS
     if (renderer->isUsingGpuDevice()) {
         GrContext* ctx = renderer->getGrContext();
+
         ctx->printCacheStats();
-#ifdef SK_DEVELOPER
-        ctx->dumpFontCache();
-#endif
     }
 #endif
 #endif
-    if (FLAGS_writeJsonSummaryPath.count() == 1) {
-        jsonSummary.writeToFile(FLAGS_writeJsonSummaryPath[0]);
-    }
     return 0;
 }
 

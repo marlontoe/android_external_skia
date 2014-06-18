@@ -7,32 +7,32 @@
  */
 #include "SkBenchmark.h"
 #include "SkBitmap.h"
-#include "SkCommandLineFlags.h"
 #include "SkImageDecoder.h"
 #include "SkString.h"
-
-DEFINE_string(decodeBenchFilename, "resources/CMYK.jpeg", "Path to image for DecodeBench.");
 
 static const char* gConfigName[] = {
     "ERROR", "a1", "a8", "index8", "565", "4444", "8888"
 };
 
 class DecodeBench : public SkBenchmark {
+    const char* fFilename;
     SkBitmap::Config fPrefConfig;
     SkString fName;
+    enum { N = SkBENCHLOOP(10) };
 public:
-    DecodeBench(SkBitmap::Config c) {
+    DecodeBench(void* param, SkBitmap::Config c) : SkBenchmark(param) {
+        fFilename = this->findDefine("decode-filename");
         fPrefConfig = c;
 
-        const char* fname = strrchr(FLAGS_decodeBenchFilename[0], '/');
-        if (fname) {
-            fname++; // skip the slash
+        const char* fname = NULL;
+        if (fFilename) {
+            fname = strrchr(fFilename, '/');
+            if (fname) {
+                fname += 1; // skip the slash
+            }
         }
         fName.printf("decode_%s_%s", gConfigName[c], fname);
-    }
-
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+        fIsRendering = false;
     }
 
 protected:
@@ -40,13 +40,13 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
-        for (int i = 0; i < loops; i++) {
-            SkBitmap bm;
-            SkImageDecoder::DecodeFile(FLAGS_decodeBenchFilename[0],
-                                       &bm,
-                                       fPrefConfig,
-                                       SkImageDecoder::kDecodePixels_Mode);
+    virtual void onDraw(SkCanvas*) {
+        if (fFilename) {
+            for (int i = 0; i < N; i++) {
+                SkBitmap bm;
+                SkImageDecoder::DecodeFile(fFilename, &bm, fPrefConfig,
+                                           SkImageDecoder::kDecodePixels_Mode);
+            }
         }
     }
 
@@ -54,6 +54,10 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
-DEF_BENCH( return new DecodeBench(SkBitmap::kARGB_8888_Config); )
-DEF_BENCH( return new DecodeBench(SkBitmap::kRGB_565_Config); )
-DEF_BENCH( return new DecodeBench(SkBitmap::kARGB_4444_Config); )
+static SkBenchmark* Fact0(void* p) { return new DecodeBench(p, SkBitmap::kARGB_8888_Config); }
+static SkBenchmark* Fact1(void* p) { return new DecodeBench(p, SkBitmap::kRGB_565_Config); }
+static SkBenchmark* Fact2(void* p) { return new DecodeBench(p, SkBitmap::kARGB_4444_Config); }
+
+static BenchRegistry gReg0(Fact0);
+static BenchRegistry gReg1(Fact1);
+static BenchRegistry gReg2(Fact2);

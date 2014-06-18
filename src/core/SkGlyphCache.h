@@ -197,6 +197,27 @@ private:
     SkGlyph* lookupMetrics(uint32_t id, MetricsType);
     static bool DetachProc(const SkGlyphCache*, void*) { return true; }
 
+    void detach(SkGlyphCache** head) {
+        if (fPrev) {
+            fPrev->fNext = fNext;
+        } else {
+            *head = fNext;
+        }
+        if (fNext) {
+            fNext->fPrev = fPrev;
+        }
+        fPrev = fNext = NULL;
+    }
+
+    void attachToHead(SkGlyphCache** head) {
+        SkASSERT(NULL == fPrev && NULL == fNext);
+        if (*head) {
+            (*head)->fPrev = this;
+            fNext = *head;
+        }
+        *head = this;
+    }
+
     SkGlyphCache*       fNext, *fPrev;
     SkDescriptor*       fDesc;
     SkScalerContext*    fScalerContext;
@@ -210,6 +231,8 @@ private:
     SkGlyph*            fGlyphHash[kHashCount];
     SkTDArray<SkGlyph*> fGlyphArray;
     SkChunkAlloc        fGlyphAlloc;
+
+    int fMetricsCount, fAdvanceCount;
 
     struct CharGlyphRec {
         uint32_t    fID;    // unichar + subpixel
@@ -234,6 +257,9 @@ private:
     };
     AuxProcRec* fAuxProcList;
     void invokeAndRemoveAuxProcs();
+
+    // This relies on the caller to have already acquired the mutex to access the global cache
+    static size_t InternalFreeCache(SkGlyphCache_Globals*, size_t bytesNeeded);
 
     inline static SkGlyphCache* FindTail(SkGlyphCache* head);
 
@@ -271,6 +297,5 @@ private:
 
     static bool DetachProc(const SkGlyphCache*, void*);
 };
-#define SkAutoGlyphCache(...) SK_REQUIRE_LOCAL_VAR(SkAutoGlyphCache)
 
 #endif

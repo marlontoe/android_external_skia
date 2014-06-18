@@ -5,9 +5,9 @@
  * found in the LICENSE file.
  */
 #include "SkBenchmark.h"
-#include "SkBitmapDevice.h"
 #include "SkBitmapSource.h"
 #include "SkCanvas.h"
+#include "SkDevice.h"
 #include "SkDisplacementMapEffect.h"
 
 #define FILTER_WIDTH_SMALL  32
@@ -17,25 +17,25 @@
 
 class DisplacementBaseBench : public SkBenchmark {
 public:
-    DisplacementBaseBench(bool small) :
-        fInitialized(false), fIsSmall(small) {
+    DisplacementBaseBench(void* param, bool small) :
+        INHERITED(param), fInitialized(false), fIsSmall(small) {
     }
 
 protected:
     virtual void onPreDraw() SK_OVERRIDE {
         if (!fInitialized) {
-            this->makeBitmap();
-            this->makeCheckerboard();
+            make_bitmap();
+            make_checkerboard();
             fInitialized = true;
         }
     }
 
-    void makeBitmap() {
-        const int w = this->isSmall() ? FILTER_WIDTH_SMALL : FILTER_WIDTH_LARGE;
-        const int h = this->isSmall() ? FILTER_HEIGHT_LARGE : FILTER_HEIGHT_LARGE;
+    void make_bitmap() {
+        const int w = isSmall() ? FILTER_WIDTH_SMALL : FILTER_WIDTH_LARGE;
+        const int h = isSmall() ? FILTER_HEIGHT_LARGE : FILTER_HEIGHT_LARGE;
         fBitmap.setConfig(SkBitmap::kARGB_8888_Config, w, h);
         fBitmap.allocPixels();
-        SkBitmapDevice device(fBitmap);
+        SkDevice device(fBitmap);
         SkCanvas canvas(&device);
         canvas.clear(0x00000000);
         SkPaint paint;
@@ -46,12 +46,12 @@ protected:
         canvas.drawText(str, strlen(str), SkIntToScalar(15), SkIntToScalar(55), paint);
     }
 
-    void makeCheckerboard() {
-        const int w = this->isSmall() ? FILTER_WIDTH_SMALL : FILTER_WIDTH_LARGE;
-        const int h = this->isSmall() ? FILTER_HEIGHT_LARGE : FILTER_HEIGHT_LARGE;
+    void make_checkerboard() {
+        const int w = isSmall() ? FILTER_WIDTH_SMALL : FILTER_WIDTH_LARGE;
+        const int h = isSmall() ? FILTER_HEIGHT_LARGE : FILTER_HEIGHT_LARGE;
         fCheckerboard.setConfig(SkBitmap::kARGB_8888_Config, w, h);
         fCheckerboard.allocPixels();
-        SkBitmapDevice device(fCheckerboard);
+        SkDevice device(fCheckerboard);
         SkCanvas canvas(&device);
         canvas.clear(0x00000000);
         SkPaint darkPaint;
@@ -74,8 +74,7 @@ protected:
     void drawClippedBitmap(SkCanvas* canvas, int x, int y, const SkPaint& paint) {
         canvas->save();
         canvas->clipRect(SkRect::MakeXYWH(SkIntToScalar(x), SkIntToScalar(y),
-                                          SkIntToScalar(fBitmap.width()),
-                                          SkIntToScalar(fBitmap.height())));
+            SkIntToScalar(fBitmap.width()), SkIntToScalar(fBitmap.height())));
         canvas->drawBitmap(fBitmap, SkIntToScalar(x), SkIntToScalar(y), &paint);
         canvas->restore();
     }
@@ -91,25 +90,22 @@ private:
 
 class DisplacementZeroBench : public DisplacementBaseBench {
 public:
-    DisplacementZeroBench(bool small) : INHERITED(small) {
+    DisplacementZeroBench(void* param, bool small) : INHERITED(param, small) {
     }
 
 protected:
     virtual const char* onGetName() SK_OVERRIDE {
-        return this->isSmall() ? "displacement_zero_small" : "displacement_zero_large";
+        return isSmall() ? "displacement_zero_small" : "displacement_zero_large";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint;
         SkAutoTUnref<SkImageFilter> displ(SkNEW_ARGS(SkBitmapSource, (fCheckerboard)));
         // No displacement effect
         paint.setImageFilter(SkNEW_ARGS(SkDisplacementMapEffect,
             (SkDisplacementMapEffect::kR_ChannelSelectorType,
              SkDisplacementMapEffect::kG_ChannelSelectorType, 0.0f, displ)))->unref();
-
-        for (int i = 0; i < loops; i++) {
-            this->drawClippedBitmap(canvas, 0, 0, paint);
-        }
+        drawClippedBitmap(canvas, 0, 0, paint);
     }
 
 private:
@@ -118,7 +114,7 @@ private:
 
 class DisplacementAlphaBench : public DisplacementBaseBench {
 public:
-    DisplacementAlphaBench(bool small) : INHERITED(small) {
+    DisplacementAlphaBench(void* param, bool small) : INHERITED(param, small) {
     }
 
 protected:
@@ -126,16 +122,14 @@ protected:
         return isSmall() ? "displacement_alpha_small" : "displacement_alpha_large";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint;
         SkAutoTUnref<SkImageFilter> displ(SkNEW_ARGS(SkBitmapSource, (fCheckerboard)));
         // Displacement, with 1 alpha component (which isn't pre-multiplied)
         paint.setImageFilter(SkNEW_ARGS(SkDisplacementMapEffect,
             (SkDisplacementMapEffect::kB_ChannelSelectorType,
              SkDisplacementMapEffect::kA_ChannelSelectorType, 16.0f, displ)))->unref();
-        for (int i = 0; i < loops; i++) {
-            drawClippedBitmap(canvas, 100, 0, paint);
-        }
+        drawClippedBitmap(canvas, 100, 0, paint);
     }
 
 private:
@@ -144,7 +138,7 @@ private:
 
 class DisplacementFullBench : public DisplacementBaseBench {
 public:
-    DisplacementFullBench(bool small) : INHERITED(small) {
+    DisplacementFullBench(void* param, bool small) : INHERITED(param, small) {
     }
 
 protected:
@@ -152,16 +146,14 @@ protected:
         return isSmall() ? "displacement_full_small" : "displacement_full_large";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint;
         SkAutoTUnref<SkImageFilter> displ(SkNEW_ARGS(SkBitmapSource, (fCheckerboard)));
         // Displacement, with 2 non-alpha components
         paint.setImageFilter(SkNEW_ARGS(SkDisplacementMapEffect,
             (SkDisplacementMapEffect::kR_ChannelSelectorType,
              SkDisplacementMapEffect::kB_ChannelSelectorType, 32.0f, displ)))->unref();
-        for (int i = 0; i < loops; ++i) {
-            this->drawClippedBitmap(canvas, 200, 0, paint);
-        }
+        drawClippedBitmap(canvas, 200, 0, paint);
     }
 
 private:
@@ -170,9 +162,9 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new DisplacementZeroBench(true); )
-DEF_BENCH( return new DisplacementAlphaBench(true); )
-DEF_BENCH( return new DisplacementFullBench(true); )
-DEF_BENCH( return new DisplacementZeroBench(false); )
-DEF_BENCH( return new DisplacementAlphaBench(false); )
-DEF_BENCH( return new DisplacementFullBench(false); )
+DEF_BENCH( return new DisplacementZeroBench(p, true); )
+DEF_BENCH( return new DisplacementAlphaBench(p, true); )
+DEF_BENCH( return new DisplacementFullBench(p, true); )
+DEF_BENCH( return new DisplacementZeroBench(p, false); )
+DEF_BENCH( return new DisplacementAlphaBench(p, false); )
+DEF_BENCH( return new DisplacementFullBench(p, false); )

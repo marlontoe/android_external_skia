@@ -6,7 +6,6 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkPath.h"
 #include "SkCanvas.h"
 
@@ -149,6 +148,9 @@ static void test_emptydrawing(skiatest::Reporter* reporter) {
     }
 }
 
-DEF_TEST(EmptyPath, reporter) {
+static void TestEmptyPath(skiatest::Reporter* reporter) {
     test_emptydrawing(reporter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("EmptyPath", TestEmptyPathClass, TestEmptyPath)

@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2012 Google Inc.
  *
@@ -5,14 +6,13 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-#include "TestClassDef.h"
 #include "SamplePipeControllers.h"
 #include "SkBitmap.h"
 #include "SkCanvas.h"
 #include "SkGPipe.h"
 #include "SkPaint.h"
 #include "SkShader.h"
+#include "Test.h"
 
 // Ensures that the pipe gracefully handles drawing an invalid bitmap.
 static void testDrawingBadBitmap(SkCanvas* pipeCanvas) {
@@ -43,7 +43,7 @@ static void testDrawingAfterEndRecording(SkCanvas* canvas) {
     pipeCanvas->drawBitmap(bm, 0, 0);
 }
 
-DEF_TEST(Pipe, reporter) {
+static void test_pipeTests(skiatest::Reporter*) {
     SkBitmap bitmap;
     bitmap.setConfig(SkBitmap::kARGB_8888_Config, 64, 64);
     SkCanvas canvas(bitmap);
@@ -56,3 +56,6 @@ DEF_TEST(Pipe, reporter) {
 
     testDrawingAfterEndRecording(&canvas);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("PipeTest", PipeTestClass, test_pipeTests)

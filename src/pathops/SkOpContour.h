@@ -15,7 +15,7 @@ class SkOpContour;
 class SkPathWriter;
 
 struct SkCoincidence {
-    SkOpContour* fOther;
+    SkOpContour* fContours[2];
     int fSegments[2];
     double fTs[2][2];
     SkPoint fPts[2];
@@ -25,8 +25,8 @@ class SkOpContour {
 public:
     SkOpContour() {
         reset();
-#ifdef SK_DEBUG
-        fID = ++SkPathOpsDebug::gContourID;
+#if DEBUG_DUMP
+        fID = ++gContourID;
 #endif
     }
 
@@ -36,7 +36,7 @@ public:
                 : fBounds.fTop < rh.fBounds.fTop;
     }
 
-    bool addCoincident(int index, SkOpContour* other, int otherIndex,
+    void addCoincident(int index, SkOpContour* other, int otherIndex,
                        const SkIntersections& ts, bool swap);
     void addCoincidentPoints();
 
@@ -63,9 +63,6 @@ public:
         fSegments[segIndex].addOtherT(tIndex, otherT, otherIndex);
     }
 
-    bool addPartialCoincident(int index, SkOpContour* other, int otherIndex,
-                       const SkIntersections& ts, int ptIndex, bool swap);
-
     int addQuad(const SkPoint pts[3]) {
         fSegments.push_back().addQuad(pts, fOperand, fXor);
         fContainsCurves = true;
@@ -82,12 +79,16 @@ public:
         return fSegments[segIndex].addSelfT(&other->fSegments[otherIndex], pt, newT);
     }
 
+    int addUnsortableT(int segIndex, SkOpContour* other, int otherIndex, bool start,
+                       const SkPoint& pt, double newT) {
+        return fSegments[segIndex].addUnsortableT(&other->fSegments[otherIndex], start, pt, newT);
+    }
+
     const SkPathOpsBounds& bounds() const {
         return fBounds;
     }
 
     void calcCoincidentWinding();
-    void calcPartialCoincidentWinding();
 
     void checkEnds() {
         if (!fContainsCurves) {
@@ -99,21 +100,7 @@ public:
             if (segment->verb() == SkPath::kLine_Verb) {
                 continue;
             }
-            if (segment->done()) {
-                continue;   // likely coincident, nothing to do
-            }
-            segment->checkEnds();
-        }
-    }
-
-    // if same point has different T values, choose a common T
-    void checkTiny() {
-        int segmentCount = fSegments.count();
-        if (segmentCount <= 2) {
-            return;
-        }
-        for (int sIndex = 0; sIndex < segmentCount; ++sIndex) {
-            fSegments[sIndex].checkTiny();
+            fSegments[sIndex].checkEnds();
         }
     }
 
@@ -144,16 +131,18 @@ public:
         return segment.pts()[SkPathOpsVerbToPoints(segment.verb())];
     }
 
+    void findTooCloseToCall() {
+        int segmentCount = fSegments.count();
+        for (int sIndex = 0; sIndex < segmentCount; ++sIndex) {
+            fSegments[sIndex].findTooCloseToCall();
+        }
+    }
+
     void fixOtherTIndex() {
         int segmentCount = fSegments.count();
         for (int sIndex = 0; sIndex < segmentCount; ++sIndex) {
             fSegments[sIndex].fixOtherTIndex();
         }
-    }
-
-    void joinCoincidence() {
-        joinCoincidence(fCoincidences, false);
-        joinCoincidence(fPartialCoincidences, true);
     }
 
     SkOpSegment* nonVerticalSegment(int* start, int* end);
@@ -243,15 +232,12 @@ public:
 #endif
 
 private:
-    void calcCommonCoincidentWinding(const SkCoincidence& );
-    void joinCoincidence(const SkTArray<SkCoincidence, true>& , bool partial);
     void setBounds();
 
     SkTArray<SkOpSegment> fSegments;
     SkTArray<SkOpSegment*, true> fSortedSegments;
     int fFirstSorted;
     SkTArray<SkCoincidence, true> fCoincidences;
-    SkTArray<SkCoincidence, true> fPartialCoincidences;
     SkTArray<const SkOpContour*, true> fCrosses;
     SkPathOpsBounds fBounds;
     bool fContainsIntercepts;  // FIXME: is this used by anybody?
@@ -261,7 +247,7 @@ private:
     bool fOperand;  // true for the second argument to a binary operator
     bool fXor;
     bool fOppXor;
-#ifdef SK_DEBUG
+#if DEBUG_DUMP
     int fID;
 #endif
 };

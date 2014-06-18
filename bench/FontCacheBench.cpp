@@ -20,27 +20,31 @@ static int count_glyphs(const uint16_t start[]) {
     while (*curr != gUniqueGlyphIDs_Sentinel) {
         curr += 1;
     }
-    return static_cast<int>(curr - start);
+    return curr - start;
 }
 
 class FontCacheBench : public SkBenchmark {
+    enum {
+        N = SkBENCHLOOP(50)
+    };
+
 public:
-    FontCacheBench()  {}
+    FontCacheBench(void* param) : INHERITED(param) {}
 
 protected:
     virtual const char* onGetName() SK_OVERRIDE {
         return "fontcache";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint;
         this->setupPaint(&paint);
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
 
         const uint16_t* array = gUniqueGlyphIDs;
         while (*array != gUniqueGlyphIDs_Sentinel) {
-            int count = count_glyphs(array);
-            for (int i = 0; i < loops; ++i) {
+            size_t count = count_glyphs(array);
+            for (int i = 0; i < N; ++i) {
                 paint.measureText(array, count * sizeof(uint16_t));
             }
             array += count + 1;    // skip the sentinel
@@ -109,7 +113,7 @@ static void dump_array(const uint16_t array[], int count) {
 
 class FontCacheEfficiency : public SkBenchmark {
 public:
-    FontCacheEfficiency()  {
+    FontCacheEfficiency(void* param) : INHERITED(param) {
         if (false) dump_array(NULL, 0);
         if (false) rotr(0, 0);
     }
@@ -119,7 +123,7 @@ protected:
         return "fontefficiency";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         static bool gDone;
         if (gDone) {
             return;
@@ -152,7 +156,7 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new FontCacheBench(); )
+DEF_BENCH( return new FontCacheBench(p); )
 
 // undefine this to run the efficiency test
-//DEF_BENCH( return new FontCacheEfficiency(); )
+//DEF_BENCH( return new FontCacheEfficiency(p); )

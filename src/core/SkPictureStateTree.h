@@ -115,6 +115,7 @@ private:
     void appendNode(uint32_t offset);
 
     SkChunkAlloc fAlloc;
+    Node* fRoot;
     // Needed by saveCollapsed() because nodes do not currently store
     // references to their children.  If they did, we could just retrieve the
     // last added child.
@@ -138,9 +139,6 @@ private:
             kSaveLayer_Flag = 0x2
         };
     };
-
-    Node fRoot;
-    SkMatrix fRootMatrix;
 
     typedef SkRefCnt INHERITED;
 };

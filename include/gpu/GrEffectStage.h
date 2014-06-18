@@ -48,8 +48,8 @@ public:
     }
 
     bool operator== (const GrEffectStage& other) const {
-        SkASSERT(NULL != fEffectRef.get());
-        SkASSERT(NULL != other.fEffectRef.get());
+        GrAssert(NULL != fEffectRef.get());
+        GrAssert(NULL != other.fEffectRef.get());
 
         if (!(*this->getEffect())->isEqual(*other.getEffect())) {
             return false;
@@ -87,7 +87,7 @@ public:
     private:
         bool fCoordChangeMatrixSet;
         SkMatrix fCoordChangeMatrix;
-        SkDEBUGCODE(mutable SkAutoTUnref<const GrEffectRef> fEffectRef;)
+        GR_DEBUGCODE(mutable SkAutoTUnref<const GrEffectRef> fEffectRef;)
 
         friend class GrEffectStage;
     };
@@ -103,9 +103,9 @@ public:
         if (fCoordChangeMatrixSet) {
             savedCoordChange->fCoordChangeMatrix = fCoordChangeMatrix;
         }
-        SkASSERT(NULL == savedCoordChange->fEffectRef.get());
-        SkDEBUGCODE(SkRef(fEffectRef.get());)
-        SkDEBUGCODE(savedCoordChange->fEffectRef.reset(fEffectRef.get());)
+        GrAssert(NULL == savedCoordChange->fEffectRef.get());
+        GR_DEBUGCODE(SkRef(fEffectRef.get());)
+        GR_DEBUGCODE(savedCoordChange->fEffectRef.reset(fEffectRef.get());)
     }
 
     /**
@@ -116,8 +116,8 @@ public:
         if (fCoordChangeMatrixSet) {
             fCoordChangeMatrix = savedCoordChange.fCoordChangeMatrix;
         }
-        SkASSERT(savedCoordChange.fEffectRef.get() == fEffectRef);
-        SkDEBUGCODE(savedCoordChange.fEffectRef.reset(NULL);)
+        GrAssert(savedCoordChange.fEffectRef.get() == fEffectRef);
+        GR_DEBUGCODE(savedCoordChange.fEffectRef.reset(NULL);)
     }
 
     /**
@@ -137,8 +137,8 @@ public:
         }
 
         void saveFrom(const GrEffectStage& stage) {
-            SkASSERT(!fInitialized);
-            SkASSERT(NULL != stage.fEffectRef.get());
+            GrAssert(!fInitialized);
+            GrAssert(NULL != stage.fEffectRef.get());
             stage.fEffectRef->get()->incDeferredRefCounts();
             fEffect = stage.fEffectRef->get();
             fCoordChangeMatrixSet = stage.fCoordChangeMatrixSet;
@@ -151,7 +151,7 @@ public:
         }
 
         void restoreTo(GrEffectStage* stage) const {
-            SkASSERT(fInitialized);
+            GrAssert(fInitialized);
             stage->fEffectRef.reset(GrEffect::CreateEffectRef(fEffect));
             stage->fCoordChangeMatrixSet = fCoordChangeMatrixSet;
             if (fCoordChangeMatrixSet) {

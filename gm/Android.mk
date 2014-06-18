@@ -20,31 +20,21 @@ LOCAL_SRC_FILES += \
   androidfallback.cpp \
   arcofzorro.cpp \
   arithmode.cpp \
-  beziereffects.cpp \
   bicubicfilter.cpp \
-  bigblurs.cpp \
   bigmatrix.cpp \
   bigtext.cpp \
-  bitmapalphathreshold.cpp \
   bitmapcopy.cpp \
   bitmapmatrix.cpp \
   bitmapfilters.cpp \
-  bitmappremul.cpp \
   bitmaprect.cpp \
   bitmaprecttest.cpp \
   bitmapscroll.cpp \
-  bitmapshader.cpp \
-  bitmapsource.cpp \
   bleed.cpp \
   blurs.cpp \
-  blurquickreject.cpp \
   blurrect.cpp \
-  blurroundrect.cpp \
-  canvasstate.cpp \
+  blurquickreject.cpp \
   circles.cpp \
   circularclips.cpp \
-  clippedbitmapshaders.cpp \
-  coloremoji.cpp \
   colorfilterimagefilter.cpp \
   colormatrix.cpp \
   colortype.cpp \
@@ -64,7 +54,6 @@ LOCAL_SRC_FILES += \
   downsamplebitmap.cpp \
   drawbitmaprect.cpp \
   drawlooper.cpp \
-  dropshadowimagefilter.cpp \
   extractbitmap.cpp \
   emptypath.cpp \
   fatpathfill.cpp \
@@ -72,14 +61,12 @@ LOCAL_SRC_FILES += \
   filltypes.cpp \
   filltypespersp.cpp \
   filterbitmap.cpp \
-  fontcache.cpp \
   fontmgr.cpp \
   fontscaler.cpp \
   gammatext.cpp \
   getpostextpath.cpp \
   giantbitmap.cpp \
   gradients.cpp \
-  gradients_no_texture.cpp \
   gradientDirtyLaundry.cpp \
   gradient_matrix.cpp \
   gradtext.cpp \
@@ -89,7 +76,6 @@ LOCAL_SRC_FILES += \
   imagemagnifier.cpp \
   inversepaths.cpp \
   lighting.cpp \
-  lumafilter.cpp \
   image.cpp \
   imagefiltersbase.cpp \
   imagefilterscropped.cpp \
@@ -104,9 +90,7 @@ LOCAL_SRC_FILES += \
   morphology.cpp \
   nested.cpp \
   ninepatchstretch.cpp \
-  offsetimagefilter.cpp \
-  nonclosedpaths.cpp \
-  offsetimagefilter.cpp \
+  nocolorbleed.cpp \
   optimizations.cpp \
   ovals.cpp \
   patheffects.cpp \
@@ -116,10 +100,8 @@ LOCAL_SRC_FILES += \
   pathopsskpclip.cpp \
   pathreverse.cpp \
   perlinnoise.cpp \
-  pictureimagefilter.cpp \
   points.cpp \
   poly2poly.cpp \
-  polygons.cpp \
   quadpaths.cpp \
   rects.cpp \
   rrect.cpp \
@@ -134,8 +116,6 @@ LOCAL_SRC_FILES += \
   shadows.cpp \
   shallowgradient.cpp \
   simpleaaclip.cpp \
-  skbug1719.cpp \
-  stringart.cpp \
   spritebitmap.cpp \
   srcmode.cpp \
   strokefill.cpp \
@@ -147,9 +127,7 @@ LOCAL_SRC_FILES += \
   texdata.cpp \
   thinrects.cpp \
   thinstrokedrects.cpp \
-  tileimagefilter.cpp \
   tilemodes.cpp \
-  tilemodes_scaled.cpp \
   tinybitmap.cpp \
   twopointradial.cpp \
   typeface.cpp \

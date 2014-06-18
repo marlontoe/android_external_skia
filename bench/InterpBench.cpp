@@ -16,14 +16,11 @@ class InterpBench : public SkBenchmark {
     int16_t     fDst[kBuffer];
     float       fFx, fDx;
 public:
-    InterpBench(const char name[])  {
+    InterpBench(void* param, const char name[]) : INHERITED(param) {
         fName.printf("interp_%s", name);
         fFx = 3.3f;
         fDx = 0.1257f;
-    }
-
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+        fIsRendering = false;
     }
 
     virtual void performTest(int16_t dst[], float x, float dx, int count) = 0;
@@ -35,8 +32,8 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
-        int n = loops * this->mulLoopCount();
+    virtual void onDraw(SkCanvas*) {
+        int n = SkBENCHLOOP(kLoop * this->mulLoopCount());
         for (int i = 0; i < n; i++) {
             this->performTest(fDst, fFx, fDx, kBuffer);
         }
@@ -48,7 +45,7 @@ private:
 
 class Fixed16D16Interp : public InterpBench {
 public:
-    Fixed16D16Interp() : INHERITED("16.16") {}
+    Fixed16D16Interp(void* param) : INHERITED(param, "16.16") {}
 
 protected:
     virtual void performTest(int16_t dst[], float fx, float dx, int count) SK_OVERRIDE {
@@ -67,7 +64,7 @@ private:
 
 class Fixed32D32Interp : public InterpBench {
 public:
-    Fixed32D32Interp() : INHERITED("32.32") {}
+    Fixed32D32Interp(void* param) : INHERITED(param, "32.32") {}
 
 protected:
     virtual void performTest(int16_t dst[], float fx, float dx, int count) SK_OVERRIDE {
@@ -98,7 +95,7 @@ private:
 
 class Fixed16D48Interp : public InterpBench {
 public:
-    Fixed16D48Interp() : INHERITED("16.48") {}
+    Fixed16D48Interp(void* param) : INHERITED(param, "16.48") {}
 
 protected:
     virtual void performTest(int16_t dst[], float fx, float dx, int count) SK_OVERRIDE {
@@ -118,7 +115,7 @@ private:
 
 class FloatInterp : public InterpBench {
 public:
-    FloatInterp() : INHERITED("float") {}
+    FloatInterp(void* param) : INHERITED(param, "float") {}
 
 protected:
     virtual void performTest(int16_t dst[], float fx, float dx, int count) SK_OVERRIDE {
@@ -136,7 +133,7 @@ private:
 
 class DoubleInterp : public InterpBench {
 public:
-    DoubleInterp() : INHERITED("double") {}
+    DoubleInterp(void* param) : INHERITED(param, "double") {}
 
 protected:
     virtual void performTest(int16_t dst[], float fx, float dx, int count) SK_OVERRIDE {
@@ -156,8 +153,14 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new Fixed16D16Interp(); )
-DEF_BENCH( return new Fixed32D32Interp(); )
-DEF_BENCH( return new Fixed16D48Interp(); )
-DEF_BENCH( return new FloatInterp(); )
-DEF_BENCH( return new DoubleInterp(); )
+static SkBenchmark* M0(void* p) { return new Fixed16D16Interp(p); }
+static SkBenchmark* M1(void* p) { return new Fixed32D32Interp(p); }
+static SkBenchmark* M2(void* p) { return new Fixed16D48Interp(p); }
+static SkBenchmark* M3(void* p) { return new FloatInterp(p); }
+static SkBenchmark* M4(void* p) { return new DoubleInterp(p); }
+
+static BenchRegistry gReg0(M0);
+static BenchRegistry gReg1(M1);
+static BenchRegistry gReg2(M2);
+static BenchRegistry gReg3(M3);
+static BenchRegistry gReg4(M4);

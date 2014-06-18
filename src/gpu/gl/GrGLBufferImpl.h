@@ -8,7 +8,7 @@
 #ifndef GrGLBufferImpl_DEFINED
 #define GrGLBufferImpl_DEFINED
 
-#include "SkTypes.h"
+#include "GrNoncopyable.h"
 #include "gl/GrGLFunctions.h"
 
 class GrGpuGL;
@@ -17,7 +17,7 @@ class GrGpuGL;
  * This class serves as the implementation of GrGL*Buffer classes. It was written to avoid code
  * duplication in those classes.
  */
-class GrGLBufferImpl : public SkNoncopyable {
+class GrGLBufferImpl : public GrNoncopyable {
 public:
     struct Desc {
         bool        fIsWrapped;
@@ -29,7 +29,7 @@ public:
     GrGLBufferImpl(GrGpuGL*, const Desc&, GrGLenum bufferType);
     ~GrGLBufferImpl() {
         // either release or abandon should have been called by the owner of this object.
-        SkASSERT(0 == fDesc.fID);
+        GrAssert(0 == fDesc.fID);
     }
 
     void abandon();
@@ -54,7 +54,7 @@ private:
     void*        fCPUData;
     void*        fLockPtr;
 
-    typedef SkNoncopyable INHERITED;
+    typedef GrNoncopyable INHERITED;
 };
 
 #endif

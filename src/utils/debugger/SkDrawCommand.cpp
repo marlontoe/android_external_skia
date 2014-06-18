@@ -342,8 +342,7 @@ bool SkDrawBitmapNineCommand::render(SkCanvas* canvas) const {
 }
 
 SkDrawBitmapRectCommand::SkDrawBitmapRectCommand(const SkBitmap& bitmap, const SkRect* src,
-                                                 const SkRect& dst, const SkPaint* paint,
-                                                 SkCanvas::DrawBitmapRectFlags flags) {
+                                                 const SkRect& dst, const SkPaint* paint) {
     fBitmap = bitmap;
     if (NULL != src) {
         fSrc = *src;
@@ -358,8 +357,6 @@ SkDrawBitmapRectCommand::SkDrawBitmapRectCommand(const SkBitmap& bitmap, const S
     } else {
         fPaintPtr = NULL;
     }
-    fFlags = flags;
-
     fDrawType = DRAW_BITMAP_RECT_TO_RECT;
 
     fInfo.push(SkObjectParser::BitmapToString(bitmap));
@@ -370,11 +367,10 @@ SkDrawBitmapRectCommand::SkDrawBitmapRectCommand(const SkBitmap& bitmap, const S
     if (NULL != paint) {
         fInfo.push(SkObjectParser::PaintToString(*paint));
     }
-    fInfo.push(SkObjectParser::IntToString(fFlags, "Flags: "));
 }
 
 void SkDrawBitmapRectCommand::execute(SkCanvas* canvas) {
-    canvas->drawBitmapRectToRect(fBitmap, this->srcRect(), fDst, fPaintPtr, fFlags);
+    canvas->drawBitmapRectToRect(fBitmap, this->srcRect(), fDst, fPaintPtr);
 }
 
 bool SkDrawBitmapRectCommand::render(SkCanvas* canvas) const {
@@ -485,28 +481,11 @@ bool SkDrawPathCommand::render(SkCanvas* canvas) const {
 SkDrawPictureCommand::SkDrawPictureCommand(SkPicture& picture) :
     fPicture(picture) {
     fDrawType = DRAW_PICTURE;
-    SkString* temp = new SkString;
-    temp->appendf("SkPicture: W: %d H: %d", picture.width(), picture.height());
-    fInfo.push(temp);
+    fInfo.push(SkObjectParser::CustomTextToString("To be implemented."));
 }
 
 void SkDrawPictureCommand::execute(SkCanvas* canvas) {
     canvas->drawPicture(fPicture);
-}
-
-bool SkDrawPictureCommand::render(SkCanvas* canvas) const {
-    canvas->clear(0xFFFFFFFF);
-    canvas->save();
-
-    SkRect bounds = SkRect::MakeWH(SkIntToScalar(fPicture.width()),
-                                   SkIntToScalar(fPicture.height()));
-    xlate_and_scale_to_bounds(canvas, bounds);
-
-    canvas->drawPicture(const_cast<SkPicture&>(fPicture));
-
-    canvas->restore();
-
-    return true;
 }
 
 SkDrawPointsCommand::SkDrawPointsCommand(SkCanvas::PointMode mode, size_t count,

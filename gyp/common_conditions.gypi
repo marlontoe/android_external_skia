@@ -3,15 +3,37 @@
 {
   'defines': [
     'SK_ALLOW_STATIC_GLOBAL_INITIALIZERS=<(skia_static_initializers)',
-    'SK_SUPPORT_GPU=<(skia_gpu)',
-    'SK_SUPPORT_OPENCL=<(skia_opencl)',
-    'SK_DISTANCEFIELD_FONTS=<(skia_distancefield_fonts)',
+#    'SK_SUPPORT_HINTING_SCALE_FACTOR',
   ],
   'conditions' : [
+    [ 'skia_gpu == 1',
+      {
+        'defines': [
+          'SK_SUPPORT_GPU=1',
+        ],
+      }, {
+        'defines': [
+          'SK_SUPPORT_GPU=0',
+        ],
+      },
+    ],
+    [ 'skia_opencl == 1',
+      {
+        'defines': [
+          'SK_SUPPORT_OPENCL=1',
+        ],
+      }, {
+        'defines': [
+          'SK_SUPPORT_OPENCL=0',
+        ],
+      },
+    ],
     [ 'skia_os == "win"',
       {
         'defines': [
           'SK_BUILD_FOR_WIN32',
+          'SK_FONTHOST_USES_FONTMGR',
+          'SK_IGNORE_STDINT_DOT_H',
           '_CRT_SECURE_NO_WARNINGS',
           'GR_GL_FUNCTION_TYPE=__stdcall',
         ],
@@ -119,23 +141,6 @@
     # The following section is common to linux + derivatives and android
     [ 'skia_os in ["linux", "freebsd", "openbsd", "solaris", "nacl", "chromeos", "android"]',
       {
-        'cflags': [
-          '-g',
-          '-fno-exceptions',
-          '-fstrict-aliasing',
-
-          '-Wall',
-          '-Wextra',
-          '-Winit-self',
-          '-Wpointer-arith',
-
-          '-Wno-unused-parameter',
-          '-Wno-c++11-extensions',
-        ],
-        'cflags_cc': [
-          '-fno-rtti',
-          '-Wnon-virtual-dtor',
-        ],
         'conditions': [
           [ 'skia_warnings_as_errors', {
             'cflags': [
@@ -201,25 +206,32 @@
           'SK_BUILD_FOR_UNIX',
         ],
         'configurations': {
-          'Coverage': {
-            'cflags': ['--coverage'],
-            'ldflags': ['--coverage'],
-          },
           'Debug': {
+            'cflags': ['-g']
           },
           'Release': {
             'cflags': [
               '-O<(skia_release_optimization_level)',
+              '-g',
             ],
             'defines': [ 'NDEBUG' ],
           },
         },
+        'cflags': [
+          '-Wall',
+          '-Wextra',
+          # suppressions below here were added for clang
+          '-Wno-unused-parameter',
+          '-Wno-c++11-extensions'
+        ],
         'conditions' : [
           [ 'skia_shared_lib', {
             'cflags': [
               '-fPIC',
             ],
             'defines': [
+              'GR_DLL=1',
+              'GR_IMPLEMENTATION=1',
               'SKIA_DLL',
               'SKIA_IMPLEMENTATION=1',
             ],
@@ -236,15 +248,13 @@
                 '-pthread',
               ],
             },
-          }, { # skia_os != "nacl"
-            'link_settings': {
-              'ldflags': [
-                '-lstdc++',
-                '-lm',
-              ],
-            },
           }],
-          [ 'skia_os != "chromeos"', {
+          [ 'skia_os == "chromeos"', {
+            'ldflags': [
+              '-lstdc++',
+              '-lm',
+            ],
+          }, {
             'conditions': [
               [ 'skia_arch_width == 64 and skia_arch_type == "x86"', {
                 'cflags': [
@@ -264,35 +274,14 @@
               }],
             ],
           }],
-          # Enable asan, tsan, etc.
-          [ 'skia_sanitizer', {
+          [ 'skia_asan_build', {
             'cflags': [
-              '-fsanitize=<(skia_sanitizer)',
+              '-fsanitize=address',
+              '-fno-omit-frame-pointer',
             ],
             'ldflags': [
-              '-fsanitize=<(skia_sanitizer)',
+              '-fsanitize=address',
             ],
-            'conditions' : [
-              [ 'skia_sanitizer == "thread"', {
-                'defines': [ 'DYNAMIC_ANNOTATIONS_ENABLED=1' ],
-                'cflags': [ '-fPIC' ],
-                'target_conditions': [
-                  [ '_type == "executable"', {
-                    'cflags': [ '-fPIE' ],
-                    'ldflags': [ '-pie' ],
-                  }],
-                ],
-              }],
-            ],
-          }],
-          [ 'skia_clang_build', {
-            'cflags': [
-              # Extra warnings we like but that only Clang knows about.
-              '-Wstring-conversion',
-            ],
-          }],
-          [ 'skia_keep_frame_pointer', {
-            'cflags': [ '-fno-omit-frame-pointer' ],
           }],
         ],
       },
@@ -305,6 +294,7 @@
         },
         'defines': [
           'SK_BUILD_FOR_MAC',
+          'SK_FONTHOST_USES_FONTMGR',
         ],
         'conditions' : [
           [ 'skia_arch_width == 64', {
@@ -337,13 +327,6 @@
           }],
         ],
         'configurations': {
-          'Coverage': {
-            'xcode_settings': {
-               'GCC_OPTIMIZATION_LEVEL': '0',
-               'GCC_GENERATE_TEST_COVERAGE_FILES': 'YES',
-               'GCC_INSTRUMENT_PROGRAM_FLOW_ARCS' : 'YES',
-            },
-          },
           'Debug': {
             'xcode_settings': {
               'GCC_OPTIMIZATION_LEVEL': '0',
@@ -442,7 +425,6 @@
       {
         'defines': [
           'SK_BUILD_FOR_ANDROID',
-          'SK_FONTHOST_DOES_NOT_USE_FONTMGR',
         ],
         'configurations': {
           'Debug': {
@@ -459,7 +441,13 @@
           '-llog',
         ],
         'cflags': [
+          '-Wall',
+          '-fno-exceptions',
+          '-fstrict-aliasing',
           '-fuse-ld=gold',
+        ],
+        'cflags_cc': [
+          '-fno-rtti',
         ],
         'conditions': [
           [ 'skia_shared_lib', {
@@ -467,6 +455,8 @@
               '-fPIC',
             ],
             'defines': [
+              'GR_DLL=1',
+              'GR_IMPLEMENTATION=1',
               'SKIA_DLL',
               'SKIA_IMPLEMENTATION=1',
             ],
@@ -491,3 +481,9 @@
     'SYMROOT': '<(DEPTH)/xcodebuild',
   },
 }
+
+# Local Variables:
+# tab-width:2
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=2 shiftwidth=2:

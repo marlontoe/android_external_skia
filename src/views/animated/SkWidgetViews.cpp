@@ -24,6 +24,8 @@ enum SkinEnum {
 };
 */
 
+SK_DEFINE_INST_COUNT(SkListSource)
+
 const char* get_skin_enum_path(SkinEnum se)
 {
     SkASSERT((unsigned)se < kSkinEnumCount);

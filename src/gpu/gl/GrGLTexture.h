@@ -15,7 +15,7 @@
 /**
  * A ref counted tex id that deletes the texture in its destructor.
  */
-class GrGLTexID : public SkRefCnt {
+class GrGLTexID : public GrRefCnt {
 public:
     SK_DECLARE_INST_COUNT(GrGLTexID)
 
@@ -39,7 +39,7 @@ private:
     GrGLuint             fTexID;
     bool                 fIsWrapped;
 
-    typedef SkRefCnt INHERITED;
+    typedef GrRefCnt INHERITED;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

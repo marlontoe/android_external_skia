@@ -432,7 +432,7 @@ bool SkGIFMovie::onGetBitmap(SkBitmap* bm)
 
 #include "SkTRegistry.h"
 
-SkMovie* Factory(SkStreamRewindable* stream) {
+SkMovie* Factory(SkStream* stream) {
     char buf[GIF_STAMP_LEN];
     if (stream->read(buf, GIF_STAMP_LEN) == GIF_STAMP_LEN) {
         if (memcmp(GIF_STAMP,   buf, GIF_STAMP_LEN) == 0 ||
@@ -446,4 +446,4 @@ SkMovie* Factory(SkStreamRewindable* stream) {
     return NULL;
 }
 
-static SkTRegistry<SkMovie*(*)(SkStreamRewindable*)> gReg(Factory);
+static SkTRegistry<SkMovie*, SkStream*> gReg(Factory);

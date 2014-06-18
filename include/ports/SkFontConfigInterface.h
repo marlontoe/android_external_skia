@@ -106,7 +106,6 @@ public:
                                 SkTArray<FontIdentity>*) {
         return false;
     }
-    typedef SkRefCnt INHERITED;
 };
 
 #endif

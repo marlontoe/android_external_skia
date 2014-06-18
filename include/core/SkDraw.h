@@ -17,7 +17,7 @@
 class SkBitmap;
 class SkBounder;
 class SkClipStack;
-class SkBaseDevice;
+class SkDevice;
 class SkMatrix;
 class SkPath;
 class SkRegion;
@@ -45,15 +45,8 @@ public:
      *  affect the geometry/rasterization, then the pre matrix can just be
      *  pre-concated with the current matrix.
      */
-    void    drawPath(const SkPath& path, const SkPaint& paint,
-                     const SkMatrix* prePathMatrix, bool pathIsMutable) const {
-        this->drawPath(path, paint, prePathMatrix, pathIsMutable, false);
-    }
-
-    void drawPath(const SkPath& path, const SkPaint& paint) const {
-        this->drawPath(path, paint, NULL, false, false);
-    }
-
+    void    drawPath(const SkPath& srcPath, const SkPaint&,
+                     const SkMatrix* prePathMatrix, bool pathIsMutable) const;
     void    drawBitmap(const SkBitmap&, const SkMatrix&, const SkPaint&) const;
     void    drawSprite(const SkBitmap&, int x, int y, const SkPaint&) const;
     void    drawText(const char text[], size_t byteLength, SkScalar x,
@@ -63,20 +56,19 @@ public:
                         int scalarsPerPosition, const SkPaint& paint) const;
     void    drawTextOnPath(const char text[], size_t byteLength,
                         const SkPath&, const SkMatrix*, const SkPaint&) const;
+#ifdef SK_BUILD_FOR_ANDROID
+    void    drawPosTextOnPath(const char text[], size_t byteLength,
+                              const SkPoint pos[], const SkPaint& paint,
+                              const SkPath& path, const SkMatrix* matrix) const;
+#endif
     void    drawVertices(SkCanvas::VertexMode mode, int count,
                          const SkPoint vertices[], const SkPoint textures[],
                          const SkColor colors[], SkXfermode* xmode,
                          const uint16_t indices[], int ptCount,
                          const SkPaint& paint) const;
 
-    /**
-     *  Overwrite the target with the path's coverage (i.e. its mask).
-     *  Will overwrite the entire device, so it need not be zero'd first.
-     *
-     *  Only device A8 is supported right now.
-     */
-    void drawPathCoverage(const SkPath& src, const SkPaint& paint) const {
-        this->drawPath(src, paint, NULL, false, true);
+    void drawPath(const SkPath& src, const SkPaint& paint) const {
+        this->drawPath(src, paint, NULL, false);
     }
 
     /** Helper function that creates a mask from a path and an optional maskfilter.
@@ -117,9 +109,6 @@ private:
     void    drawDevMask(const SkMask& mask, const SkPaint&) const;
     void    drawBitmapAsMask(const SkBitmap&, const SkPaint&) const;
 
-    void    drawPath(const SkPath&, const SkPaint&, const SkMatrix* preMatrix,
-                     bool pathIsMutable, bool drawCoverage) const;
-
     /**
      *  Return the current clip bounds, in local coordinates, with slop to account
      *  for antialiasing or hairlines (i.e. device-bounds outset by 1, and then
@@ -140,7 +129,7 @@ public:
     const SkRasterClip* fRC;        // required
 
     const SkClipStack* fClipStack;  // optional
-    SkBaseDevice*   fDevice;        // optional
+    SkDevice*       fDevice;        // optional
     SkBounder*      fBounder;       // optional
     SkDrawProcs*    fProcs;         // optional
 

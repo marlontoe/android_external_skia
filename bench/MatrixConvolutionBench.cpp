@@ -13,15 +13,15 @@
 
 class MatrixConvolutionBench : public SkBenchmark {
 public:
-    MatrixConvolutionBench(SkMatrixConvolutionImageFilter::TileMode tileMode, bool convolveAlpha)
-        : fName("matrixconvolution") {
+    MatrixConvolutionBench(void* param, SkMatrixConvolutionImageFilter::TileMode tileMode, bool convolveAlpha)
+        : INHERITED(param), fName("matrixconvolution") {
         SkISize kernelSize = SkISize::Make(3, 3);
         SkScalar kernel[9] = {
             SkIntToScalar( 1), SkIntToScalar( 1), SkIntToScalar( 1),
             SkIntToScalar( 1), SkIntToScalar(-7), SkIntToScalar( 1),
             SkIntToScalar( 1), SkIntToScalar( 1), SkIntToScalar( 1),
         };
-        SkScalar gain = 0.3f, bias = SkIntToScalar(100);
+        SkScalar gain = SkFloatToScalar(0.3f), bias = SkIntToScalar(100);
         SkIPoint target = SkIPoint::Make(1, 1);
         fFilter = new SkMatrixConvolutionImageFilter(kernelSize, kernel, gain, bias, target, tileMode, convolveAlpha);
     }
@@ -35,12 +35,12 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
         SkPaint paint;
         this->setupPaint(&paint);
         paint.setAntiAlias(true);
         SkRandom rand;
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < SkBENCHLOOP(3); i++) {
             SkRect r = SkRect::MakeWH(rand.nextUScalar1() * 400,
                                       rand.nextUScalar1() * 400);
             paint.setImageFilter(fFilter);
@@ -54,7 +54,12 @@ private:
     SkString fName;
 };
 
-DEF_BENCH( return new MatrixConvolutionBench(SkMatrixConvolutionImageFilter::kClamp_TileMode, true); )
-DEF_BENCH( return new MatrixConvolutionBench(SkMatrixConvolutionImageFilter::kRepeat_TileMode, true); )
-DEF_BENCH( return new MatrixConvolutionBench(SkMatrixConvolutionImageFilter::kClampToBlack_TileMode, true); )
-DEF_BENCH( return new MatrixConvolutionBench(SkMatrixConvolutionImageFilter::kClampToBlack_TileMode, false); )
+static SkBenchmark* Fact00(void* p) { return new MatrixConvolutionBench(p, SkMatrixConvolutionImageFilter::kClamp_TileMode, true); }
+static SkBenchmark* Fact01(void* p) { return new MatrixConvolutionBench(p, SkMatrixConvolutionImageFilter::kRepeat_TileMode, true); }
+static SkBenchmark* Fact02(void* p) { return new MatrixConvolutionBench(p, SkMatrixConvolutionImageFilter::kClampToBlack_TileMode, true); }
+static SkBenchmark* Fact03(void* p) { return new MatrixConvolutionBench(p, SkMatrixConvolutionImageFilter::kClampToBlack_TileMode, false); }
+
+static BenchRegistry gReg00(Fact00);
+static BenchRegistry gReg01(Fact01);
+static BenchRegistry gReg02(Fact02);
+static BenchRegistry gReg03(Fact03);

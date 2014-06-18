@@ -13,7 +13,8 @@
 
 class PremulAndUnpremulAlphaOpsBench : public SkBenchmark {
 public:
-    PremulAndUnpremulAlphaOpsBench(SkCanvas::Config8888 config) {
+    PremulAndUnpremulAlphaOpsBench(void* param, SkCanvas::Config8888 config)
+        : INHERITED(param) {
         fUnPremulConfig = config;
         fName.printf("premul_and_unpremul_alpha_%s",
                      (config ==  SkCanvas::kRGBA_Unpremul_Config8888) ?
@@ -25,7 +26,7 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         canvas->clear(SK_ColorBLACK);
         SkISize size = canvas->getDeviceSize();
 
@@ -45,7 +46,8 @@ protected:
         bmp2.setConfig(SkBitmap::kARGB_8888_Config, size.width(),
                        size.height());
 
-        for (int loop = 0; loop < loops; ++loop) {
+        static const int kLoopCount = SkBENCHLOOP(10);
+        for (int loop = 0; loop < kLoopCount; ++loop) {
             // Unpremul -> Premul
             canvas->writePixels(bmp1, 0, 0, fUnPremulConfig);
             // Premul -> Unpremul
@@ -59,6 +61,14 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
+static SkBenchmark* fact0(void* p) {
+    return new PremulAndUnpremulAlphaOpsBench(p,
+        SkCanvas::kRGBA_Unpremul_Config8888);
+}
+static SkBenchmark* fact1(void* p) {
+    return new PremulAndUnpremulAlphaOpsBench(p,
+        SkCanvas::kNative_Unpremul_Config8888);
+}
 
-DEF_BENCH(return new PremulAndUnpremulAlphaOpsBench(SkCanvas::kRGBA_Unpremul_Config8888));
-DEF_BENCH(return new PremulAndUnpremulAlphaOpsBench(SkCanvas::kNative_Unpremul_Config8888));
+static BenchRegistry gReg0(fact0);
+static BenchRegistry gReg1(fact1);

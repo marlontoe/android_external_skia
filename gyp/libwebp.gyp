@@ -112,7 +112,6 @@
             '../third_party/externals/libwebp/src/enc/vp8l.c',
             '../third_party/externals/libwebp/src/enc/webpenc.c',
           ],
-          'cflags': [ '-w' ],
         },
         {
           'target_name': 'libwebp_utils',

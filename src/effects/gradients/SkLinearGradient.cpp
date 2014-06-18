@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2012 Google Inc.
  *
@@ -448,11 +449,10 @@ public:
                           EffectKey,
                           const char* outputColor,
                           const char* inputColor,
-                          const TransformedCoordsArray&,
                           const TextureSamplerArray&) SK_OVERRIDE;
 
     static EffectKey GenKey(const GrDrawEffect& drawEffect, const GrGLCaps&) {
-        return GenBaseGradientKey(drawEffect);
+        return GenMatrixKey(drawEffect);
     }
 
 private:
@@ -497,7 +497,7 @@ private:
 
 GR_DEFINE_EFFECT_TEST(GrLinearGradient);
 
-GrEffectRef* GrLinearGradient::TestCreate(SkRandom* random,
+GrEffectRef* GrLinearGradient::TestCreate(SkMWCRandom* random,
                                           GrContext* context,
                                           const GrDrawTargetCaps&,
                                           GrTexture**) {
@@ -523,12 +523,14 @@ void GrGLLinearGradient::emitCode(GrGLShaderBuilder* builder,
                                   EffectKey key,
                                   const char* outputColor,
                                   const char* inputColor,
-                                  const TransformedCoordsArray& coords,
                                   const TextureSamplerArray& samplers) {
-    this->emitUniforms(builder, key);
-    SkString t = builder->ensureFSCoords2D(coords, 0);
+    this->emitYCoordUniform(builder);
+    const char* coords;
+    this->setupMatrix(builder, key, &coords);
+    SkString t;
+    t.append(coords);
     t.append(".x");
-    this->emitColor(builder, t.c_str(), key, outputColor, inputColor, samplers);
+    this->emitColorLookup(builder, t.c_str(), outputColor, inputColor, samplers[0]);
 }
 
 /////////////////////////////////////////////////////////////////////

@@ -25,15 +25,7 @@
  */
 class SkTileGrid : public SkBBoxHierarchy {
 public:
-    enum {
-        // Number of tiles for which data is allocated on the stack in
-        // SkTileGrid::search. If malloc becomes a bottleneck, we may consider
-        // increasing this number. Typical large web page, say 2k x 16k, would
-        // require 512 tiles of size 256 x 256 pixels.
-        kStackAllocationTileCount = 1024
-    };
-
-    typedef void* (*SkTileGridNextDatumFunctionPtr)(SkTDArray<void*>** tileData, SkAutoSTArray<kStackAllocationTileCount, int>& tileIndices);
+    typedef void* (*SkTileGridNextDatumFunctionPtr)(SkTDArray<void*>** tileData, SkTDArray<int>& tileIndices);
 
     SkTileGrid(int xTileCount, int yTileCount, const SkTileGridPicture::TileGridInfo& info,
         SkTileGridNextDatumFunctionPtr nextDatumFunction);
@@ -99,7 +91,7 @@ private:
  *     such that 'a < b' is true if 'a' was inserted into the tile grid before 'b'.
  */
 template <typename T>
-void* SkTileGridNextDatum(SkTDArray<void*>** tileData, SkAutoSTArray<SkTileGrid::kStackAllocationTileCount, int>& tileIndices) {
+void* SkTileGridNextDatum(SkTDArray<void*>** tileData, SkTDArray<int>& tileIndices) {
     T* minVal = NULL;
     int tileCount = tileIndices.count();
     int minIndex = tileCount;

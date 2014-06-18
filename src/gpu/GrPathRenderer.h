@@ -6,6 +6,7 @@
  * found in the LICENSE file.
  */
 
+
 #ifndef GrPathRenderer_DEFINED
 #define GrPathRenderer_DEFINED
 
@@ -13,7 +14,6 @@
 #include "GrPathRendererChain.h"
 #include "GrStencil.h"
 
-#include "SkDrawProcs.h"
 #include "SkStrokeRec.h"
 #include "SkTArray.h"
 
@@ -28,7 +28,7 @@ struct GrPoint;
  *  stages before GrPaint::kTotalStages are reserved for setting up the draw (i.e., textures and
  *  filter masks).
  */
-class SK_API GrPathRenderer : public SkRefCnt {
+class GR_API GrPathRenderer : public GrRefCnt {
 public:
     SK_DECLARE_INST_COUNT(GrPathRenderer)
 
@@ -84,7 +84,7 @@ public:
     StencilSupport getStencilSupport(const SkPath& path,
                                      const SkStrokeRec& stroke,
                                      const GrDrawTarget* target) const {
-        SkASSERT(!path.isInverseFillType());
+        GrAssert(!path.isInverseFillType());
         return this->onGetStencilSupport(path, stroke, target);
     }
 
@@ -117,9 +117,9 @@ public:
                   const SkStrokeRec& stroke,
                   GrDrawTarget* target,
                   bool antiAlias) {
-        SkASSERT(!path.isEmpty());
-        SkASSERT(this->canDrawPath(path, stroke, target, antiAlias));
-        SkASSERT(target->drawState()->getStencil().isDisabled() ||
+        GrAssert(!path.isEmpty());
+        GrAssert(this->canDrawPath(path, stroke, target, antiAlias));
+        GrAssert(target->drawState()->getStencil().isDisabled() ||
                  kNoRestriction_StencilSupport == this->getStencilSupport(path, stroke, target));
         return this->onDrawPath(path, stroke, target, antiAlias);
     }
@@ -133,23 +133,9 @@ public:
      * @param target                target that the path will be rendered to
      */
     void stencilPath(const SkPath& path, const SkStrokeRec& stroke, GrDrawTarget* target) {
-        SkASSERT(!path.isEmpty());
-        SkASSERT(kNoSupport_StencilSupport != this->getStencilSupport(path, stroke, target));
+        GrAssert(!path.isEmpty());
+        GrAssert(kNoSupport_StencilSupport != this->getStencilSupport(path, stroke, target));
         this->onStencilPath(path, stroke, target);
-    }
-
-    // Helper for determining if we can treat a thin stroke as a hairline w/ coverage.
-    // If we can, we draw lots faster (raster device does this same test).
-    static bool IsStrokeHairlineOrEquivalent(const SkStrokeRec& stroke, const SkMatrix& matrix,
-                                             SkScalar* outCoverage) {
-        if (stroke.isHairlineStyle()) {
-            if (NULL != outCoverage) {
-                *outCoverage = SK_Scalar1;
-            }
-            return true;
-        }
-        return stroke.getStyle() == SkStrokeRec::kStroke_Style &&
-            SkDrawTreatAAStrokeAsHairline(stroke.getWidth(), matrix, outCoverage);
     }
 
 protected:
@@ -207,7 +193,7 @@ protected:
 
 private:
 
-    typedef SkRefCnt INHERITED;
+    typedef GrRefCnt INHERITED;
 };
 
 #endif

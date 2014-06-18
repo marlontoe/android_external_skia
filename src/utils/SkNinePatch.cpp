@@ -43,7 +43,7 @@ static int fillIndices(uint16_t indices[], int xCount, int yCount) {
         }
         n += 1;
     }
-    return static_cast<int>(indices - startIndices);
+    return indices - startIndices;
 }
 
 // Computes the delta between vertices along a single axis

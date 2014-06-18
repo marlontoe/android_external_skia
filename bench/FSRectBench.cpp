@@ -17,14 +17,17 @@
  */
 class FSRectBench : public SkBenchmark {
 public:
-    FSRectBench() : fInit(false) { }
+    FSRectBench(void* param)
+        : INHERITED(param)
+        , fInit(false) {
+    }
 
 protected:
     virtual const char* onGetName() SK_OVERRIDE { return "fullscreen_rects"; }
 
     virtual void onPreDraw() SK_OVERRIDE {
         if (!fInit) {
-            SkRandom rand;
+            SkMWCRandom rand;
             static const SkScalar kMinOffset = 0;
             static const SkScalar kMaxOffset = 100 * SK_Scalar1;
             static const SkScalar kOffsetRange = kMaxOffset - kMinOffset;
@@ -39,11 +42,11 @@ protected:
         }
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint;
-        for (int i = 0; i < loops; ++i) {
-            paint.setColor(fColors[i % N]);
-            canvas->drawRect(fRects[i % N], paint);
+        for (int i = 0; i < N; ++i) {
+            paint.setColor(fColors[i]);
+            canvas->drawRect(fRects[i], paint);
         }
     }
 
@@ -51,7 +54,7 @@ private:
     enum {
         W = 640,
         H = 480,
-        N = 300,
+        N = SkBENCHLOOP(300)
     };
     SkRect  fRects[N];
     SkColor fColors[N];
@@ -60,4 +63,4 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
-DEF_BENCH( return SkNEW_ARGS(FSRectBench, ()); )
+DEF_BENCH( return SkNEW_ARGS(FSRectBench, (p)); )

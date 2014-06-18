@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2013 Google Inc.
  *
@@ -6,7 +7,6 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkRandom.h"
 #include "SkTSort.h"
 
@@ -61,7 +61,7 @@ static void test_random_byte(skiatest::Reporter* reporter, int shift) {
     int bins[256];
     memset(bins, 0, sizeof(int)*256);
 
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int i = 0; i < 256*10000; ++i) {
         bins[(rand.nextU() >> shift) & 0xff]++;
     }
@@ -73,7 +73,7 @@ static void test_random_float(skiatest::Reporter* reporter) {
     int bins[256];
     memset(bins, 0, sizeof(int)*256);
 
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int i = 0; i < 256*10000; ++i) {
         float f = rand.nextF();
         REPORTER_ASSERT(reporter, 0.0f <= f && f < 1.0f);
@@ -108,7 +108,7 @@ static double test_single_gorilla(skiatest::Reporter* reporter, int shift) {
     const int kNumEntries = kN >> 5;  // dividing by 32
     unsigned int entries[kNumEntries];
 
-    SkRandom rand;
+    SkMWCRandom rand;
     memset(entries, 0, sizeof(unsigned int)*kNumEntries);
     // pre-seed our string value
     int value = 0;
@@ -161,7 +161,7 @@ static void test_gorilla(skiatest::Reporter* reporter) {
 }
 
 static void test_range(skiatest::Reporter* reporter) {
-    SkRandom rand;
+    SkMWCRandom rand;
 
     // just to make sure we don't crash in this case
     (void) rand.nextRangeU(0, 0xffffffff);
@@ -178,7 +178,7 @@ static void test_range(skiatest::Reporter* reporter) {
     REPORTER_ASSERT(reporter, chi_square_test(bins, 10000));
 }
 
-DEF_TEST(Random, reporter) {
+static void TestRandom(skiatest::Reporter* reporter) {
     // check uniform distributions of each byte in 32-bit word
     test_random_byte(reporter, 0);
     test_random_byte(reporter, 8);
@@ -191,3 +191,6 @@ DEF_TEST(Random, reporter) {
 
     test_range(reporter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Random", RandomTestClass, TestRandom)

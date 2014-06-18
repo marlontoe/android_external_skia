@@ -60,14 +60,22 @@ public:
      *  @return the actual number bytes that could be skipped.
      */
     size_t skip(size_t size) {
-        return this->read(NULL, size);
+        //return this->read(NULL, size);
+        //TODO: remove this old logic after updating existing implementations
+        return 0 == size ? 0 : this->read(NULL, size);
     }
 
     /** Returns true when all the bytes in the stream have been read.
      *  This may return true early (when there are no more bytes to be read)
      *  or late (after the first unsuccessful read).
+     *
+     *  In Progress: do not use until all implementations are updated.
+     *  TODO: after this is implemented everywhere, make pure virtual.
      */
-    virtual bool isAtEnd() const = 0;
+    virtual bool isAtEnd() const {
+        SkASSERT(false);
+        return true;
+    }
 
     int8_t   readS8();
     int16_t  readS16();
@@ -125,7 +133,11 @@ public:
     /** Returns true if this stream can report it's total length. */
     virtual bool hasLength() const { return false; }
     /** Returns the total length of the stream. If this cannot be done, returns 0. */
-    virtual size_t getLength() const { return 0; }
+    virtual size_t getLength() const {
+        //return 0;
+        //TODO: remove the following after everyone is updated.
+        return ((SkStream*)this)->read(NULL, 0);
+    }
 
 //SkStreamMemory
     /** Returns the starting address for the data. If this cannot be done, returns NULL. */
@@ -139,6 +151,11 @@ private:
 /** SkStreamRewindable is a SkStream for which rewind and duplicate are required. */
 class SK_API SkStreamRewindable : public SkStream {
 public:
+    //TODO: remove the following after everyone is updated (ensures new behavior on new classes).
+    virtual bool isAtEnd() const SK_OVERRIDE = 0;
+    //TODO: remove the following after everyone is updated (ensures new behavior on new classes).
+    virtual size_t getLength() const SK_OVERRIDE { return 0; }
+
     virtual bool rewind() SK_OVERRIDE = 0;
     virtual SkStreamRewindable* duplicate() const SK_OVERRIDE = 0;
 };
@@ -221,7 +238,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////
 
 #include "SkString.h"
-#include <stdio.h>
 
 struct SkFILE;
 

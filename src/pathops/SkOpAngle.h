@@ -12,30 +12,23 @@
 #include "SkPathOpsCubic.h"
 
 class SkOpSegment;
-struct SkOpSpan;
 
 // sorting angles
 // given angles of {dx dy ddx ddy dddx dddy} sort them
 class SkOpAngle {
 public:
     enum { kStackBasedCount = 8 }; // FIXME: determine what this should be
-    enum IncludeType {
-        kUnaryWinding,
-        kUnaryXor,
-        kBinarySingle,
-        kBinaryOpp,
-    };
 
     bool operator<(const SkOpAngle& rh) const;
 
     bool calcSlop(double x, double y, double rx, double ry, bool* result) const;
 
     double dx() const {
-        return fTangentPart.dx();
+        return fTangent1.dx();
     }
 
     double dy() const {
-        return fTangentPart.dy();
+        return fTangent1.dy();
     }
 
     int end() const {
@@ -44,15 +37,7 @@ public:
 
     bool isHorizontal() const;
 
-    SkOpSpan* lastMarked() const {
-        return fLastMarked;
-    }
-
     void set(const SkOpSegment* segment, int start, int end);
-
-    void setLastMarked(SkOpSpan* marked) {
-        fLastMarked = marked;
-    }
 
     SkOpSegment* segment() const {
         return const_cast<SkOpSegment*>(fSegment);
@@ -74,11 +59,11 @@ public:
         return fUnsortable;
     }
 
-#ifdef SK_DEBUG
-    void dump() const;
-#endif
-
 #if DEBUG_ANGLE
+    void debugShow(const SkPoint& a) const {
+        SkDebugf("    d=(%1.9g,%1.9g) side=%1.9g\n", dx(), dy(), fSide);
+    }
+
     void setID(int id) {
         fID = id;
     }
@@ -88,14 +73,10 @@ private:
     bool lengthen(const SkOpAngle& );
     void setSpans();
 
-    SkDCubic fCurvePart; // the curve from start to end
-    SkDCubic fCurveHalf; // the curve from start to 1 or 0
+    SkDCubic fCurvePart;
     double fSide;
-    double fSide2;
-    SkLineParameters fTangentPart;
-    SkLineParameters fTangentHalf;
+    SkLineParameters fTangent1;
     const SkOpSegment* fSegment;
-    SkOpSpan* fLastMarked;
     int fStart;
     int fEnd;
     bool fComputed; // tangent is computed, may contain some error

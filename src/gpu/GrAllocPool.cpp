@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2010 Google Inc.
  *
@@ -5,9 +6,9 @@
  * found in the LICENSE file.
  */
 
-#include "GrAllocPool.h"
 
-#include "GrTypes.h"
+
+#include "GrAllocPool.h"
 
 #define GrAllocPool_MIN_BLOCK_SIZE      ((size_t)128)
 
@@ -18,9 +19,9 @@ struct GrAllocPool::Block {
     size_t  fBytesTotal;
 
     static Block* Create(size_t size, Block* next) {
-        SkASSERT(size >= GrAllocPool_MIN_BLOCK_SIZE);
+        GrAssert(size >= GrAllocPool_MIN_BLOCK_SIZE);
 
-        Block* block = (Block*)sk_malloc_throw(sizeof(Block) + size);
+        Block* block = (Block*)GrMalloc(sizeof(Block) + size);
         block->fNext = next;
         block->fPtr = (char*)block + sizeof(Block);
         block->fBytesFree = size;
@@ -33,7 +34,7 @@ struct GrAllocPool::Block {
     }
 
     void* alloc(size_t bytes) {
-        SkASSERT(bytes <= fBytesFree);
+        GrAssert(bytes <= fBytesFree);
         fBytesFree -= bytes;
         void* ptr = fPtr;
         fPtr += bytes;
@@ -41,7 +42,7 @@ struct GrAllocPool::Block {
     }
 
     size_t release(size_t bytes) {
-        SkASSERT(bytes > 0);
+        GrAssert(bytes > 0);
         size_t free = GrMin(bytes, fBytesTotal - fBytesFree);
         fBytesFree += free;
         fPtr -= free;
@@ -56,7 +57,7 @@ struct GrAllocPool::Block {
 GrAllocPool::GrAllocPool(size_t blockSize) {
     fBlock = NULL;
     fMinBlockSize = GrMax(blockSize, GrAllocPool_MIN_BLOCK_SIZE);
-    SkDEBUGCODE(fBlocksAllocated = 0;)
+    GR_DEBUGCODE(fBlocksAllocated = 0;)
 }
 
 GrAllocPool::~GrAllocPool() {
@@ -69,11 +70,11 @@ void GrAllocPool::reset() {
     Block* block = fBlock;
     while (block) {
         Block* next = block->fNext;
-        sk_free(block);
+        GrFree(block);
         block = next;
     }
     fBlock = NULL;
-    SkDEBUGCODE(fBlocksAllocated = 0;)
+    GR_DEBUGCODE(fBlocksAllocated = 0;)
 }
 
 void* GrAllocPool::alloc(size_t size) {
@@ -82,7 +83,7 @@ void* GrAllocPool::alloc(size_t size) {
     if (!fBlock || !fBlock->canAlloc(size)) {
         size_t blockSize = GrMax(fMinBlockSize, size);
         fBlock = Block::Create(blockSize, fBlock);
-        SkDEBUGCODE(fBlocksAllocated += 1;)
+        GR_DEBUGCODE(fBlocksAllocated += 1;)
     }
     return fBlock->alloc(size);
 }
@@ -94,14 +95,15 @@ void GrAllocPool::release(size_t bytes) {
         bytes = fBlock->release(bytes);
         if (fBlock->empty()) {
             Block* next = fBlock->fNext;
-            sk_free(fBlock);
+            GrFree(fBlock);
             fBlock = next;
-            SkDEBUGCODE(fBlocksAllocated -= 1;)
+            GR_DEBUGCODE(fBlocksAllocated -= 1;)
         }
     }
 }
 
-#ifdef SK_DEBUG
+
+#if GR_DEBUG
 
 void GrAllocPool::validate() const {
     Block* block = fBlock;
@@ -110,7 +112,7 @@ void GrAllocPool::validate() const {
         count += 1;
         block = block->fNext;
     }
-    SkASSERT(fBlocksAllocated == count);
+    GrAssert(fBlocksAllocated == count);
 }
 
 #endif

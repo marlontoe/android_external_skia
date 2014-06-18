@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkRandom.h"
 #include "SkRect.h"
 
@@ -36,7 +35,7 @@ static void test_center(skiatest::Reporter* reporter) {
                         gData[index].fRect.centerY() == gData[index].fCenter.y());
     }
 
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int i = 0; i < 10000; ++i) {
         SkIRect r;
 
@@ -58,7 +57,7 @@ static void check_invalid(skiatest::Reporter* reporter,
 
 // Tests that isFinite() will reject any rect with +/-inf values
 // as one of its coordinates.
-DEF_TEST(InfRect, reporter) {
+static void TestInfRect(skiatest::Reporter* reporter) {
 #ifdef SK_SCALAR_IS_FLOAT
     float inf = 1 / make_zero();    // infinity
     float nan = inf * 0;
@@ -87,3 +86,6 @@ DEF_TEST(InfRect, reporter) {
 }
 
 // need tests for SkStrSearch
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("InfRect", InfRectTestClass, TestInfRect)

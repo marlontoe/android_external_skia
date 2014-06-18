@@ -57,6 +57,7 @@ protected:
 
     virtual void onGetFontDescriptor(SkFontDescriptor*, bool*) const SK_OVERRIDE;
     virtual SkStream* onOpenStream(int* ttcIndex) const SK_OVERRIDE;
+    virtual SkTypeface* onRefMatchingStyle(Style) const SK_OVERRIDE;
 
 private:
     typedef SkTypeface_FreeType INHERITED;

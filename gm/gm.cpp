@@ -14,7 +14,6 @@ GM::GM() {
     fBGColor = SK_ColorWHITE;
     fCanvasIsDeferred = false;
     fHaveCalledOnceBeforeDraw = false;
-    fStarterMatrix.reset();
 }
 GM::~GM() {}
 
@@ -64,4 +63,4 @@ void GM::drawSizeBounds(SkCanvas* canvas, SkColor color) {
 }
 
 // need to explicitly declare this, or we get some weird infinite loop llist
-template GMRegistry* SkTRegistry<GM*(*)(void*)>::gHead;
+template GMRegistry* SkTRegistry<GM*, void*>::gHead;

@@ -10,7 +10,6 @@
 #include "SkTypeface.h"
 
 #include <expat.h>
-#include <stdio.h>
 #include <sys/system_properties.h>
 
 #define SYSTEM_FONTS_FILE "/system/etc/system_fonts.xml"
@@ -220,7 +219,6 @@ static void parseConfigFile(const char *filename, SkTDArray<FontFamily*> &famili
         }
         XML_Parse(parser, buffer, len, done);
     }
-    XML_ParserFree(parser);
     fclose(file);
 }
 

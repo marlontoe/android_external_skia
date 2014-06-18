@@ -1,19 +1,17 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
-#include "SkColorPriv.h"
-#include "SkEndian.h"
 #include "SkFloatBits.h"
 #include "SkFloatingPoint.h"
 #include "SkMathPriv.h"
 #include "SkPoint.h"
 #include "SkRandom.h"
+#include "SkColorPriv.h"
 
 static void test_clz(skiatest::Reporter* reporter) {
     REPORTER_ASSERT(reporter, 32 == SkCLZ(0));
@@ -146,17 +144,17 @@ static void test_blend31() {
 
                 float f = float_blend(src, dst, a / 31.f);
                 int r1 = (int)f;
-                int r2 = SkScalarRoundToInt(f);
+                int r2 = SkScalarRoundToInt(SkFloatToScalar(f));
 
                 if (r0 != r1 && r0 != r2) {
-                    SkDebugf("src:%d dst:%d a:%d result:%d float:%g\n",
-                                  src,   dst, a,        r0,      f);
+                    printf("src:%d dst:%d a:%d result:%d float:%g\n",
+                                 src, dst, a, r0, f);
                     failed += 1;
                 }
                 if (r0 > 255) {
                     death += 1;
-                    SkDebugf("death src:%d dst:%d a:%d result:%d float:%g\n",
-                                        src,   dst, a,        r0,      f);
+                    printf("death src:%d dst:%d a:%d result:%d float:%g\n",
+                           src, dst, a, r0, f);
                 }
             }
         }
@@ -170,7 +168,7 @@ static void test_blend(skiatest::Reporter* reporter) {
             for (int a = 0; a <= 255; a++) {
                 int r0 = SkAlphaBlend255(src, dst, a);
                 float f1 = float_blend(src, dst, a / 255.f);
-                int r1 = SkScalarRoundToInt(f1);
+                int r1 = SkScalarRoundToInt(SkFloatToScalar(f1));
 
                 if (r0 != r1) {
                     float diff = sk_float_abs(f1 - r1);
@@ -221,7 +219,7 @@ static void check_length(skiatest::Reporter* reporter,
     REPORTER_ASSERT(reporter, len > 0.999f && len < 1.001f);
 }
 
-static float nextFloat(SkRandom& rand) {
+static float nextFloat(SkMWCRandom& rand) {
     SkFloatIntUnion data;
     data.fSignBitInt = rand.nextU();
     return data.fFloat;
@@ -295,7 +293,7 @@ static void test_int2float(skiatest::Reporter* reporter, int ival) {
 }
 
 static void unittest_fastfloat(skiatest::Reporter* reporter) {
-    SkRandom rand;
+    SkMWCRandom rand;
     size_t i;
 
     static const float gFloats[] = {
@@ -416,7 +414,7 @@ static void test_copysign(skiatest::Reporter* reporter) {
         REPORTER_ASSERT(reporter, sk_float_copysign(x, y) == expected);
     }
 
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int j = 0; j < 1000; j++) {
         int ix = rand.nextS();
         REPORTER_ASSERT(reporter, SkCopySign32(ix, ix) == ix);
@@ -432,10 +430,10 @@ static void test_copysign(skiatest::Reporter* reporter) {
     }
 }
 
-DEF_TEST(Math, reporter) {
+static void TestMath(skiatest::Reporter* reporter) {
     int         i;
     int32_t     x;
-    SkRandom    rand;
+    SkMWCRandom    rand;
 
     // these should assert
 #if 0
@@ -648,12 +646,19 @@ DEF_TEST(Math, reporter) {
     test_clz(reporter);
 }
 
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Math", MathTestClass, TestMath)
+
+///////////////////////////////////////////////////////////////////////////////
+
+#include "SkEndian.h"
+
 template <typename T> struct PairRec {
     T   fYin;
     T   fYang;
 };
 
-DEF_TEST(TestEndian, reporter) {
+static void TestEndian(skiatest::Reporter* reporter) {
     static const PairRec<uint16_t> g16[] = {
         { 0x0,      0x0     },
         { 0xFFFF,   0xFFFF  },
@@ -685,73 +690,4 @@ DEF_TEST(TestEndian, reporter) {
     }
 }
 
-template <typename T>
-static void test_divmod(skiatest::Reporter* r) {
-    const struct {
-        T numer;
-        T denom;
-    } kEdgeCases[] = {
-        {(T)17, (T)17},
-        {(T)17, (T)4},
-        {(T)0,  (T)17},
-        // For unsigned T these negatives are just some large numbers.  Doesn't hurt to test them.
-        {(T)-17, (T)-17},
-        {(T)-17, (T)4},
-        {(T)17,  (T)-4},
-        {(T)-17, (T)-4},
-    };
-
-    for (size_t i = 0; i < SK_ARRAY_COUNT(kEdgeCases); i++) {
-        const T numer = kEdgeCases[i].numer;
-        const T denom = kEdgeCases[i].denom;
-        T div, mod;
-        SkTDivMod(numer, denom, &div, &mod);
-        REPORTER_ASSERT(r, numer/denom == div);
-        REPORTER_ASSERT(r, numer%denom == mod);
-    }
-
-    SkRandom rand;
-    for (size_t i = 0; i < 10000; i++) {
-        const T numer = (T)rand.nextS();
-        T denom = 0;
-        while (0 == denom) {
-            denom = (T)rand.nextS();
-        }
-        T div, mod;
-        SkTDivMod(numer, denom, &div, &mod);
-        REPORTER_ASSERT(r, numer/denom == div);
-        REPORTER_ASSERT(r, numer%denom == mod);
-    }
-}
-
-DEF_TEST(divmod_u8, r) {
-    test_divmod<uint8_t>(r);
-}
-
-DEF_TEST(divmod_u16, r) {
-    test_divmod<uint16_t>(r);
-}
-
-DEF_TEST(divmod_u32, r) {
-    test_divmod<uint32_t>(r);
-}
-
-DEF_TEST(divmod_u64, r) {
-    test_divmod<uint64_t>(r);
-}
-
-DEF_TEST(divmod_s8, r) {
-    test_divmod<int8_t>(r);
-}
-
-DEF_TEST(divmod_s16, r) {
-    test_divmod<int16_t>(r);
-}
-
-DEF_TEST(divmod_s32, r) {
-    test_divmod<int32_t>(r);
-}
-
-DEF_TEST(divmod_s64, r) {
-    test_divmod<int64_t>(r);
-}
+DEFINE_TESTCLASS("Endian", EndianTestClass, TestEndian)

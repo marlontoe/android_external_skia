@@ -5,13 +5,15 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-#include "TestClassDef.h"
-#include "SkRefCnt.h"
-#include "SkTRefArray.h"
-#include "SkThreadUtils.h"
 #include "SkTypes.h"
+#include "Test.h"
+
+#include "SkRefCnt.h"
+#include "SkThreadUtils.h"
 #include "SkWeakRefCnt.h"
+#include "SkTRefArray.h"
+
+///////////////////////////////////////////////////////////////////////////////
 
 class InstCounterClass {
 public:
@@ -141,8 +143,11 @@ static void test_weakRefCnt(skiatest::Reporter* reporter) {
     ref->unref();
 }
 
-DEF_TEST(RefCnt, reporter) {
+static void test_refCntTests(skiatest::Reporter* reporter) {
     test_refCnt(reporter);
     test_weakRefCnt(reporter);
     test_refarray(reporter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("RefCnt", RefCntTestClass, test_refCntTests)

@@ -9,14 +9,11 @@
 #include "SkCommandLineFlags.h"
 #include "SkData.h"
 #include "SkDocument.h"
-#include "SkForceLinking.h"
 #include "SkGraphics.h"
 #include "SkSurface.h"
 #include "SkImage.h"
 #include "SkStream.h"
 #include "SkString.h"
-
-__SK_FORCE_IMAGE_DECODER_LINKING;
 
 DEFINE_string2(outFile, o, "skhello", "The filename to write the image.");
 DEFINE_string2(text, t, "Hello", "The string to write.");
@@ -33,7 +30,10 @@ static void doDraw(SkCanvas* canvas, const SkPaint& paint, const char text[]) {
 
 static bool do_surface(int w, int h, const char path[], const char text[],
                        const SkPaint& paint) {
-    SkAutoTUnref<SkSurface> surface(SkSurface::NewRasterPMColor(w, h));
+    SkImage::Info info = {
+        w, h, SkImage::kPMColor_ColorType, SkImage::kPremul_AlphaType
+    };
+    SkAutoTUnref<SkSurface> surface(SkSurface::NewRaster(info));
     doDraw(surface->getCanvas(), paint, text);
 
     SkAutoTUnref<SkImage> image(surface->newImageSnapshot());

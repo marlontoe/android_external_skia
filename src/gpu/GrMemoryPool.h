@@ -72,7 +72,7 @@ private:
     size_t                            fMinAllocSize;
     BlockHeader*                      fHead;
     BlockHeader*                      fTail;
-#ifdef SK_DEBUG
+#if GR_DEBUG
     int                               fAllocationCnt;
 #endif
 };

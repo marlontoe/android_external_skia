@@ -8,12 +8,12 @@
 #ifndef SkFlattenableSerialization_DEFINED
 #define SkFlattenableSerialization_DEFINED
 
-#include "SkFlattenable.h"
+#include "SkTypes.h"
 
 class SkData;
+class SkFlattenable;
 
-SK_API SkData* SkValidatingSerializeFlattenable(SkFlattenable*);
-SK_API SkFlattenable* SkValidatingDeserializeFlattenable(const void* data, size_t size,
-                                                         SkFlattenable::Type type);
+SK_API SkData* SkSerializeFlattenable(SkFlattenable*);
+SK_API SkFlattenable* SkDeserializeFlattenable(const void* data, size_t size);
 
 #endif

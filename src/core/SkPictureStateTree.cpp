@@ -9,18 +9,23 @@
 #include "SkPictureStateTree.h"
 #include "SkCanvas.h"
 
+SK_DEFINE_INST_COUNT(SkPictureStateTree)
+
 SkPictureStateTree::SkPictureStateTree()
     : fAlloc(2048)
+    , fRoot(NULL)
     , fLastRestoredNode(NULL)
     , fStateStack(sizeof(Draw), 16) {
-    fRootMatrix.reset();
-    fRoot.fParent = NULL;
-    fRoot.fMatrix = &fRootMatrix;
-    fRoot.fFlags = Node::kSave_Flag;
-    fRoot.fOffset = 0;
-    fRoot.fLevel = 0;
-    fCurrentState.fNode = &fRoot;
-    fCurrentState.fMatrix = &fRootMatrix;
+    SkMatrix* identity = static_cast<SkMatrix*>(fAlloc.allocThrow(sizeof(SkMatrix)));
+    identity->reset();
+    fRoot = static_cast<Node*>(fAlloc.allocThrow(sizeof(Node)));
+    fRoot->fParent = NULL;
+    fRoot->fMatrix = identity;
+    fRoot->fFlags = Node::kSave_Flag;
+    fRoot->fOffset = 0;
+    fRoot->fLevel = 0;
+    fCurrentState.fNode = fRoot;
+    fCurrentState.fMatrix = identity;
     *static_cast<Draw*>(fStateStack.push_back()) = fCurrentState;
 }
 
@@ -75,7 +80,7 @@ void SkPictureStateTree::appendClip(uint32_t offset) {
 
 SkPictureStateTree::Iterator SkPictureStateTree::getIterator(const SkTDArray<void*>& draws,
                                                              SkCanvas* canvas) {
-    return Iterator(draws, canvas, &fRoot);
+    return Iterator(draws, canvas, fRoot);
 }
 
 void SkPictureStateTree::appendNode(uint32_t offset) {

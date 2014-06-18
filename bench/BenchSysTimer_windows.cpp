@@ -9,7 +9,7 @@
 
 //Time
 #define WIN32_LEAN_AND_MEAN 1
-#include <windows.h>
+#include <Windows.h>
 
 static ULONGLONG winCpuTime() {
     FILETIME createTime;

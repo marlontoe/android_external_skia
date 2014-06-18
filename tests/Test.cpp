@@ -19,6 +19,8 @@
 class GrContext;
 #endif
 
+SK_DEFINE_INST_COUNT(skiatest::Reporter)
+
 using namespace skiatest;
 
 Reporter::Reporter() : fTestCount(0) {

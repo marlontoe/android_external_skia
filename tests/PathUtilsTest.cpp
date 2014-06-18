@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2013 Google Inc.
  *
@@ -5,18 +6,18 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-#include "TestClassDef.h"
+#include "SkPathUtils.h"
+
 #include "SkBitmap.h"
 #include "SkCanvas.h"
-#include "SkPathUtils.h"
 #include "SkRandom.h"
 #include "SkTime.h"
+#include "Test.h"
 
 const int kNumIt = 100;
 
 static void fill_random_bits(int chars, char* bits){
-    SkRandom rand(SkTime::GetMSecs());
+    SkMWCRandom rand(SkTime::GetMSecs());
 
     for (int i = 0; i < chars; ++i){
         bits[i] = rand.nextU();
@@ -129,7 +130,7 @@ static void test_region(skiatest::Reporter* reporter, const SkBitmap* truth,
     test_path_eq(reporter, &path, truth, w, h);
 }
 
-DEF_TEST(PathUtils, reporter) {
+static void TestPathUtils(skiatest::Reporter* reporter) {
     const int w[] = {4, 8, 12, 16};
     const int h = 8, rowBytes = 4;
 
@@ -153,3 +154,6 @@ DEF_TEST(PathUtils, reporter) {
         }
     }
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("PathUtils", PathUtils, TestPathUtils)

@@ -74,7 +74,7 @@ template <typename T> const T& GrMax(const T& a, const T& b) {
  *  divide, rounding up
  */
 static inline int32_t GrIDivRoundUp(int x, int y) {
-    SkASSERT(y > 0);
+    GrAssert(y > 0);
     return (x + (y-1)) / y;
 }
 static inline uint32_t GrUIDivRoundUp(uint32_t x, uint32_t y) {
@@ -125,6 +125,16 @@ static inline size_t GrSizeAlignDown(size_t x, uint32_t alignment) {
  */
 #define GR_ARRAY_COUNT(array)  SK_ARRAY_COUNT(array)
 
+//!< allocate a block of memory, will never return NULL
+extern void* GrMalloc(size_t bytes);
+
+//!< free block allocated by GrMalloc. ptr may be NULL
+extern void GrFree(void* ptr);
+
+static inline void Gr_bzero(void* dst, size_t size) {
+    memset(dst, 0, size);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -142,7 +152,7 @@ static inline uint32_t GrNextPow2(uint32_t n) {
 }
 
 static inline int GrNextPow2(int n) {
-    SkASSERT(n >= 0); // this impl only works for non-neg.
+    GrAssert(n >= 0); // this impl only works for non-neg.
     return n ? (1 << (32 - SkCLZ(n - 1))) : 1;
 }
 
@@ -153,10 +163,10 @@ static inline int GrNextPow2(int n) {
  */
 typedef int32_t GrFixed;
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
 
 static inline int16_t GrToS16(intptr_t x) {
-    SkASSERT((int16_t)x == x);
+    GrAssert((int16_t)x == x);
     return (int16_t)x;
 }
 
@@ -238,25 +248,19 @@ enum GrMaskFormat {
     kA8_GrMaskFormat,    //!< 1-byte per pixel
     kA565_GrMaskFormat,  //!< 2-bytes per pixel
     kA888_GrMaskFormat,  //!< 4-bytes per pixel
-    kARGB_GrMaskFormat,  //!< 4-bytes per pixel, color format
 
-    kLast_GrMaskFormat = kARGB_GrMaskFormat
+    kCount_GrMaskFormats //!< used to allocate arrays sized for mask formats
 };
-static const int kMaskFormatCount = kLast_GrMaskFormat + 1;
 
 /**
  *  Return the number of bytes-per-pixel for the specified mask format.
  */
 static inline int GrMaskFormatBytesPerPixel(GrMaskFormat format) {
-    SkASSERT((unsigned)format <= 3);
+    GrAssert((unsigned)format <= 2);
     // kA8   (0) -> 1
     // kA565 (1) -> 2
     // kA888 (2) -> 4
-    // kARGB (3) -> 4
-    static const int sBytesPerPixel[] = { 1, 2, 4, 4 };
-    SK_COMPILE_ASSERT(SK_ARRAY_COUNT(sBytesPerPixel) == kMaskFormatCount, array_size_mismatch);
-
-    return sBytesPerPixel[(int) format];
+    return 1 << (int)format;
 }
 
 /**
@@ -468,7 +472,7 @@ public:
      * Initialize the cache ID to a domain and key.
      */
     GrCacheID(Domain domain, const Key& key) {
-        SkASSERT(kInvalid_Domain != domain);
+        GrAssert(kInvalid_Domain != domain);
         this->reset(domain, key);
     }
 
@@ -480,8 +484,8 @@ public:
     /** Has this been initialized to a valid domain */
     bool isValid() const { return kInvalid_Domain != fDomain; }
 
-    const Key& getKey() const { SkASSERT(this->isValid()); return fKey; }
-    Domain getDomain() const { SkASSERT(this->isValid()); return fDomain; }
+    const Key& getKey() const { GrAssert(this->isValid()); return fKey; }
+    Domain getDomain() const { GrAssert(this->isValid()); return fDomain; }
 
     /** Creates a new unique ID domain. */
     static Domain GenerateDomain();
@@ -611,9 +615,8 @@ enum GrGLBackendState {
     kStencil_GrGLBackendState          = 1 << 6,
     kPixelStore_GrGLBackendState       = 1 << 7,
     kProgram_GrGLBackendState          = 1 << 8,
-    kFixedFunction_GrGLBackendState    = 1 << 9,
+    kPathStencil_GrGLBackendState      = 1 << 9,
     kMisc_GrGLBackendState             = 1 << 10,
-    kPathRendering_GrGLBackendState    = 1 << 11,
     kALL_GrGLBackendState              = 0xffff
 };
 

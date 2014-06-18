@@ -9,8 +9,8 @@
 #define GrClipMaskCache_DEFINED
 
 #include "GrContext.h"
+#include "GrNoncopyable.h"
 #include "SkClipStack.h"
-#include "SkTypes.h"
 
 class GrTexture;
 
@@ -18,7 +18,7 @@ class GrTexture;
  * The stencil buffer stores the last clip path - providing a single entry
  * "cache". This class provides similar functionality for AA clip paths
  */
-class GrClipMaskCache : public SkNoncopyable {
+class GrClipMaskCache : public GrNoncopyable {
 public:
     GrClipMaskCache();
 
@@ -36,6 +36,10 @@ public:
         SkASSERT(clipGenID != SkClipStack::kWideOpenGenID);
         SkASSERT(clipGenID != SkClipStack::kEmptyGenID);
 
+        if (SkClipStack::kInvalidGenID == clipGenID) {
+            return false;
+        }
+
         GrClipStackFrame* back = (GrClipStackFrame*) fStack.back();
 
         // We could reuse the mask if bounds is a subset of last bounds. We'd have to communicate
@@ -51,7 +55,7 @@ public:
 
     void reset() {
         if (fStack.empty()) {
-//            SkASSERT(false);
+//            GrAssert(false);
             return;
         }
 
@@ -69,7 +73,7 @@ public:
     void push();
 
     void pop() {
-        //SkASSERT(!fStack.empty());
+        //GrAssert(!fStack.empty());
 
         if (!fStack.empty()) {
             GrClipStackFrame* back = (GrClipStackFrame*) fStack.back();
@@ -91,7 +95,7 @@ public:
     GrTexture* getLastMask() {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             return NULL;
         }
 
@@ -103,7 +107,7 @@ public:
     const GrTexture* getLastMask() const {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             return NULL;
         }
 
@@ -117,7 +121,7 @@ public:
                      const SkIRect& bound) {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             return;
         }
 
@@ -129,7 +133,7 @@ public:
     int getLastMaskWidth() const {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             return -1;
         }
 
@@ -145,7 +149,7 @@ public:
     int getLastMaskHeight() const {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             return -1;
         }
 
@@ -161,7 +165,7 @@ public:
     void getLastBound(SkIRect* bound) const {
 
         if (fStack.empty()) {
-            SkASSERT(false);
+            GrAssert(false);
             bound->setEmpty();
             return;
         }
@@ -229,7 +233,7 @@ private:
     GrContext*   fContext;
     SkDeque      fStack;
 
-    typedef SkNoncopyable INHERITED;
+    typedef GrNoncopyable INHERITED;
 };
 
 #endif // GrClipMaskCache_DEFINED

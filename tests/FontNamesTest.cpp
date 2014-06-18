@@ -6,7 +6,7 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
+
 #include "SkCommandLineFlags.h"
 #include "SkFontMgr.h"
 #include "SkOTTable_name.h"
@@ -161,7 +161,7 @@ static void test_systemfonts(skiatest::Reporter* reporter, bool verbose) {
             SkString familyName;
             typeface->getFamilyName(&familyName);
             if (verbose) {
-                SkDebugf("[%s]\n", familyName.c_str());
+                printf("[%s]\n", familyName.c_str());
             }
 
             SkAutoTUnref<SkTypeface::LocalizedStrings> familyNamesIter(
@@ -169,7 +169,7 @@ static void test_systemfonts(skiatest::Reporter* reporter, bool verbose) {
             SkTypeface::LocalizedString familyNameLocalized;
             while (familyNamesIter->next(&familyNameLocalized)) {
                 if (verbose) {
-                    SkDebugf("(%s) <%s>\n", familyNameLocalized.fString.c_str(),
+                    printf("(%s) <%s>\n", familyNameLocalized.fString.c_str(),
                                           familyNameLocalized.fLanguage.c_str());
                 }
             }
@@ -193,7 +193,7 @@ static void test_systemfonts(skiatest::Reporter* reporter, bool verbose) {
                     "Requested family name, got something else."
                 );
                 if (verbose) {
-                    SkDebugf("{%s} <%s>\n", record.name.c_str(), record.language.c_str());
+                    printf("{%s} <%s>\n", record.name.c_str(), record.language.c_str());
                 }
             }
 
@@ -205,12 +205,12 @@ static void test_systemfonts(skiatest::Reporter* reporter, bool verbose) {
                     "Requested subfamily name, got something else."
                 );
                 if (verbose) {
-                    SkDebugf("{{%s}} <%s>\n", record.name.c_str(), record.language.c_str());
+                    printf("{{%s}} <%s>\n", record.name.c_str(), record.language.c_str());
                 }
             }
 
             if (verbose) {
-                SkDebugf("\n");
+                printf("\n");
             }
         }
     }
@@ -218,7 +218,10 @@ static void test_systemfonts(skiatest::Reporter* reporter, bool verbose) {
 
 DEFINE_bool(verboseFontNames, false, "verbose FontNames test.");
 
-DEF_TEST(FontNames, reporter) {
+static void TestFontNames(skiatest::Reporter* reporter) {
     test_synthetic(reporter, FLAGS_verboseFontNames);
     test_systemfonts(reporter, FLAGS_verboseFontNames);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("FontNames", FontNamesTestClass, TestFontNames)

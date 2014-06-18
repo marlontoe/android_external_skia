@@ -26,8 +26,7 @@ public:
         return fX > fY ? (fX > fZ ? fX : fZ) : (fY > fZ ? fY : fZ);
     }
     void normalize() {
-        // Small epsilon is added to prevent division by 0.
-        SkScalar scale = SkScalarInvert(SkScalarSqrt(dot(*this)) + SK_ScalarNearlyZero);
+        SkScalar scale = SkScalarInvert(SkScalarSqrt(dot(*this)));
         fX = SkScalarMul(fX, scale);
         fY = SkScalarMul(fY, scale);
         fZ = SkScalarMul(fZ, scale);
@@ -52,24 +51,24 @@ class SK_API SkLightingImageFilter : public SkImageFilter {
 public:
     static SkImageFilter* CreateDistantLitDiffuse(const SkPoint3& direction,
         SkColor lightColor, SkScalar surfaceScale, SkScalar kd,
-        SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     static SkImageFilter* CreatePointLitDiffuse(const SkPoint3& location,
         SkColor lightColor, SkScalar surfaceScale, SkScalar kd,
-        SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     static SkImageFilter* CreateSpotLitDiffuse(const SkPoint3& location,
         const SkPoint3& target, SkScalar specularExponent, SkScalar cutoffAngle,
         SkColor lightColor, SkScalar surfaceScale, SkScalar kd,
-        SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     static SkImageFilter* CreateDistantLitSpecular(const SkPoint3& direction,
         SkColor lightColor, SkScalar surfaceScale, SkScalar ks,
-        SkScalar shininess, SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkScalar shininess, SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     static SkImageFilter* CreatePointLitSpecular(const SkPoint3& location,
         SkColor lightColor, SkScalar surfaceScale, SkScalar ks,
-        SkScalar shininess, SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkScalar shininess, SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     static SkImageFilter* CreateSpotLitSpecular(const SkPoint3& location,
         const SkPoint3& target, SkScalar specularExponent, SkScalar cutoffAngle,
         SkColor lightColor, SkScalar surfaceScale, SkScalar ks,
-        SkScalar shininess, SkImageFilter* input = NULL, const CropRect* cropRect = NULL);
+        SkScalar shininess, SkImageFilter* input = NULL, const SkIRect* cropRect = NULL);
     ~SkLightingImageFilter();
 
     SK_DECLARE_FLATTENABLE_REGISTRAR_GROUP()
@@ -78,7 +77,7 @@ protected:
     SkLightingImageFilter(SkLight* light,
                           SkScalar surfaceScale,
                           SkImageFilter* input,
-                          const CropRect* cropRect = NULL);
+                          const SkIRect* cropRect = NULL);
     explicit SkLightingImageFilter(SkFlattenableReadBuffer& buffer);
     virtual void flatten(SkFlattenableWriteBuffer&) const SK_OVERRIDE;
     const SkLight* light() const { return fLight; }

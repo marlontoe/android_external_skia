@@ -72,7 +72,7 @@ class BmpDecoderHelper {
   BmpDecoderHelper() { }
   ~BmpDecoderHelper() { }
   bool DecodeImage(const char* data,
-                   size_t len,
+                   int len,
                    int max_pixels,
                    BmpDecoderCallback* callback);
 
@@ -90,8 +90,8 @@ class BmpDecoderHelper {
   int CalcShiftLeft(uint32 mask);
 
   const uint8* data_;
-  size_t pos_;
-  size_t len_;
+  int pos_;
+  int len_;
   int width_;
   int height_;
   int bpp_;

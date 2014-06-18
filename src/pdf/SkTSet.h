@@ -199,7 +199,7 @@ public:
 
     /** Reserves memory for the set.
      */
-    void setReserve(int reserve) {
+    void setReserve(size_t reserve) {
         SkASSERT(fSetArray);
         SkASSERT(fOrderedArray);
         fSetArray->setReserve(reserve);
@@ -291,12 +291,12 @@ public:
         // A O(n log n) algorithm is necessary as O(n^2) will choke some GMs.
         SkAutoMalloc sortedArray(fOrderedArray->bytes());
         T* sortedBase = reinterpret_cast<T*>(sortedArray.get());
-        int count = fOrderedArray->count();
+        size_t count = fOrderedArray->count();
         fOrderedArray->copyRange(sortedBase, 0, count);
 
         SkTQSort<T>(sortedBase, sortedBase + count - 1);
 
-        for (int i = 0; i < count; ++i) {
+        for (size_t i = 0; i < count; ++i) {
             if (sortedBase[i] != (*fSetArray)[i]) {
                 return false;
             }

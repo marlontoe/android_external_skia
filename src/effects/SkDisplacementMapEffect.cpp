@@ -11,8 +11,8 @@
 #include "SkColorPriv.h"
 #if SK_SUPPORT_GPU
 #include "GrContext.h"
-#include "GrCoordTransform.h"
 #include "gl/GrGLEffect.h"
+#include "gl/GrGLEffectMatrix.h"
 #include "GrTBackendEffectFactory.h"
 #include "SkImageFilterUtils.h"
 #endif
@@ -21,7 +21,7 @@ namespace {
 
 template<SkDisplacementMapEffect::ChannelSelectorType type>
 uint32_t getValue(SkColor, const SkUnPreMultiply::Scale*) {
-    SkDEBUGFAIL("Unknown channel selector");
+    SkASSERT(!"Unknown channel selector");
     return 0;
 }
 
@@ -47,18 +47,20 @@ template<> uint32_t getValue<SkDisplacementMapEffect::kA_ChannelSelectorType>(
 
 template<SkDisplacementMapEffect::ChannelSelectorType typeX,
          SkDisplacementMapEffect::ChannelSelectorType typeY>
-void computeDisplacement(SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src, const SkIRect& bounds)
+void computeDisplacement(SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src)
 {
-    static const SkScalar Inv8bit = SkScalarDiv(SK_Scalar1, 255.0f);
+    static const SkScalar Inv8bit = SkScalarDiv(SK_Scalar1, SkFloatToScalar(255.0f));
+    const int dstW = displ->width();
+    const int dstH = displ->height();
     const int srcW = src->width();
     const int srcH = src->height();
     const SkScalar scaleForColor = SkScalarMul(scale, Inv8bit);
     const SkScalar scaleAdj = SK_ScalarHalf - SkScalarMul(scale, SK_ScalarHalf);
     const SkUnPreMultiply::Scale* table = SkUnPreMultiply::GetScaleTable();
-    SkPMColor* dstPtr = dst->getAddr32(0, 0);
-    for (int y = bounds.top(); y < bounds.bottom(); ++y) {
-        const SkPMColor* displPtr = displ->getAddr32(bounds.left(), y);
-        for (int x = bounds.left(); x < bounds.right(); ++x, ++displPtr) {
+    for (int y = 0; y < dstH; ++y) {
+        const SkPMColor* displPtr = displ->getAddr32(0, y);
+        SkPMColor* dstPtr = dst->getAddr32(0, y);
+        for (int x = 0; x < dstW; ++x, ++displPtr, ++dstPtr) {
             const SkScalar displX = SkScalarMul(scaleForColor,
                 SkIntToScalar(getValue<typeX>(*displPtr, table))) + scaleAdj;
             const SkScalar displY = SkScalarMul(scaleForColor,
@@ -66,7 +68,7 @@ void computeDisplacement(SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitma
             // Truncate the displacement values
             const int srcX = x + SkScalarTruncToInt(displX);
             const int srcY = y + SkScalarTruncToInt(displY);
-            *dstPtr++ = ((srcX < 0) || (srcX >= srcW) || (srcY < 0) || (srcY >= srcH)) ?
+            *dstPtr = ((srcX < 0) || (srcX >= srcW) || (srcY < 0) || (srcY >= srcH)) ?
                       0 : *(src->getAddr32(srcX, srcY));
         }
     }
@@ -74,70 +76,56 @@ void computeDisplacement(SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitma
 
 template<SkDisplacementMapEffect::ChannelSelectorType typeX>
 void computeDisplacement(SkDisplacementMapEffect::ChannelSelectorType yChannelSelector,
-                         SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src, const SkIRect& bounds)
+                         SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src)
 {
     switch (yChannelSelector) {
       case SkDisplacementMapEffect::kR_ChannelSelectorType:
         computeDisplacement<typeX, SkDisplacementMapEffect::kR_ChannelSelectorType>(
-            scale, dst, displ, src, bounds);
+            scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kG_ChannelSelectorType:
         computeDisplacement<typeX, SkDisplacementMapEffect::kG_ChannelSelectorType>(
-            scale, dst, displ, src, bounds);
+            scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kB_ChannelSelectorType:
         computeDisplacement<typeX, SkDisplacementMapEffect::kB_ChannelSelectorType>(
-            scale, dst, displ, src, bounds);
+            scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kA_ChannelSelectorType:
         computeDisplacement<typeX, SkDisplacementMapEffect::kA_ChannelSelectorType>(
-            scale, dst, displ, src, bounds);
+            scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kUnknown_ChannelSelectorType:
       default:
-        SkDEBUGFAIL("Unknown Y channel selector");
+        SkASSERT(!"Unknown Y channel selector");
     }
 }
 
 void computeDisplacement(SkDisplacementMapEffect::ChannelSelectorType xChannelSelector,
                          SkDisplacementMapEffect::ChannelSelectorType yChannelSelector,
-                         SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src, const SkIRect& bounds)
+                         SkScalar scale, SkBitmap* dst, SkBitmap* displ, SkBitmap* src)
 {
     switch (xChannelSelector) {
       case SkDisplacementMapEffect::kR_ChannelSelectorType:
         computeDisplacement<SkDisplacementMapEffect::kR_ChannelSelectorType>(
-            yChannelSelector, scale, dst, displ, src, bounds);
+            yChannelSelector, scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kG_ChannelSelectorType:
         computeDisplacement<SkDisplacementMapEffect::kG_ChannelSelectorType>(
-            yChannelSelector, scale, dst, displ, src, bounds);
+            yChannelSelector, scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kB_ChannelSelectorType:
         computeDisplacement<SkDisplacementMapEffect::kB_ChannelSelectorType>(
-            yChannelSelector, scale, dst, displ, src, bounds);
+            yChannelSelector, scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kA_ChannelSelectorType:
         computeDisplacement<SkDisplacementMapEffect::kA_ChannelSelectorType>(
-            yChannelSelector, scale, dst, displ, src, bounds);
+            yChannelSelector, scale, dst, displ, src);
         break;
       case SkDisplacementMapEffect::kUnknown_ChannelSelectorType:
       default:
-        SkDEBUGFAIL("Unknown X channel selector");
+        SkASSERT(!"Unknown X channel selector");
     }
-}
-
-bool channel_selector_type_is_valid(SkDisplacementMapEffect::ChannelSelectorType cst) {
-    switch (cst) {
-    case SkDisplacementMapEffect::kUnknown_ChannelSelectorType:
-    case SkDisplacementMapEffect::kR_ChannelSelectorType:
-    case SkDisplacementMapEffect::kG_ChannelSelectorType:
-    case SkDisplacementMapEffect::kB_ChannelSelectorType:
-    case SkDisplacementMapEffect::kA_ChannelSelectorType:
-        return true;
-    default:
-        break;
-    }
-    return false;
 }
 
 } // end namespace
@@ -148,9 +136,8 @@ SkDisplacementMapEffect::SkDisplacementMapEffect(ChannelSelectorType xChannelSel
                                                  ChannelSelectorType yChannelSelector,
                                                  SkScalar scale,
                                                  SkImageFilter* displacement,
-                                                 SkImageFilter* color,
-                                                 const CropRect* cropRect)
-  : INHERITED(displacement, color, cropRect)
+                                                 SkImageFilter* color)
+  : INHERITED(displacement, color)
   , fXChannelSelector(xChannelSelector)
   , fYChannelSelector(yChannelSelector)
   , fScale(scale)
@@ -161,14 +148,11 @@ SkDisplacementMapEffect::~SkDisplacementMapEffect() {
 }
 
 SkDisplacementMapEffect::SkDisplacementMapEffect(SkFlattenableReadBuffer& buffer)
-  : INHERITED(2, buffer)
+  : INHERITED(buffer)
 {
     fXChannelSelector = (SkDisplacementMapEffect::ChannelSelectorType) buffer.readInt();
     fYChannelSelector = (SkDisplacementMapEffect::ChannelSelectorType) buffer.readInt();
     fScale            = buffer.readScalar();
-    buffer.validate(channel_selector_type_is_valid(fXChannelSelector) &&
-                    channel_selector_type_is_valid(fYChannelSelector) &&
-                    SkScalarIsFinite(fScale));
 }
 
 void SkDisplacementMapEffect::flatten(SkFlattenableWriteBuffer& buffer) const {
@@ -200,30 +184,14 @@ bool SkDisplacementMapEffect::onFilterImage(Proxy* proxy,
     if (!displ.getPixels() || !color.getPixels()) {
         return false;
     }
-    SkIRect bounds;
-    color.getBounds(&bounds);
-    if (!this->applyCropRect(&bounds, ctm)) {
-        return false;
-    }
-    SkIRect displBounds;
-    displ.getBounds(&displBounds);
-    if (!this->applyCropRect(&displBounds, ctm)) {
-        return false;
-    }
-    if (!bounds.intersect(displBounds)) {
-        return false;
-    }
-
-    dst->setConfig(color.config(), bounds.width(), bounds.height());
+    dst->setConfig(displ.config(), displ.width(), displ.height());
     dst->allocPixels();
     if (!dst->getPixels()) {
         return false;
     }
 
-    computeDisplacement(fXChannelSelector, fYChannelSelector, fScale, dst, &displ, &color, bounds);
+    computeDisplacement(fXChannelSelector, fYChannelSelector, fScale, dst, &displ, &color);
 
-    offset->fX += bounds.left();
-    offset->fY += bounds.top();
     return true;
 }
 
@@ -241,7 +209,6 @@ public:
                           EffectKey,
                           const char* outputColor,
                           const char* inputColor,
-                          const TransformedCoordsArray&,
                           const TextureSamplerArray&) SK_OVERRIDE;
 
     static inline EffectKey GenKey(const GrDrawEffect&, const GrGLCaps&);
@@ -249,8 +216,12 @@ public:
     virtual void setData(const GrGLUniformManager&, const GrDrawEffect&) SK_OVERRIDE;
 
 private:
+    static const GrEffect::CoordsType kCoordsType = GrEffect::kLocal_CoordsType;
+
     SkDisplacementMapEffect::ChannelSelectorType fXChannelSelector;
     SkDisplacementMapEffect::ChannelSelectorType fYChannelSelector;
+    GrGLEffectMatrix fDisplacementEffectMatrix;
+    GrGLEffectMatrix fColorEffectMatrix;
     GrGLUniformManager::UniformHandle fScaleUni;
 
     typedef GrGLEffect INHERITED;
@@ -286,6 +257,7 @@ public:
     virtual void getConstantColorComponents(GrColor* color, uint32_t* validFlags) const SK_OVERRIDE;
 
 private:
+
     virtual bool onIsEqual(const GrEffect&) const SK_OVERRIDE;
 
     GrDisplacementMapEffect(SkDisplacementMapEffect::ChannelSelectorType xChannelSelector,
@@ -294,9 +266,7 @@ private:
 
     GR_DECLARE_EFFECT_TEST;
 
-    GrCoordTransform            fDisplacementTransform;
     GrTextureAccess             fDisplacementAccess;
-    GrCoordTransform            fColorTransform;
     GrTextureAccess             fColorAccess;
     SkDisplacementMapEffect::ChannelSelectorType fXChannelSelector;
     SkDisplacementMapEffect::ChannelSelectorType fYChannelSelector;
@@ -341,25 +311,12 @@ bool SkDisplacementMapEffect::filterImageGPU(Proxy* proxy, const SkBitmap& src, 
                                         fScale,
                                         displacement,
                                         color))->unref();
-    SkIRect bounds;
-    src.getBounds(&bounds);
-    if (!this->applyCropRect(&bounds, ctm)) {
-        return false;
-    }
-    SkIRect displBounds;
-    displacementBM.getBounds(&displBounds);
-    if (!this->applyCropRect(&displBounds, ctm)) {
-        return false;
-    }
-    if (!bounds.intersect(displBounds)) {
-        return false;
-    }
-    SkRect srcRect = SkRect::Make(bounds);
-    SkRect dstRect = SkRect::MakeWH(srcRect.width(), srcRect.height());
-    context->drawRectToRect(paint, dstRect, srcRect);
-    offset->fX += bounds.left();
-    offset->fY += bounds.top();
-    return SkImageFilterUtils::WrapTexture(dst, bounds.width(), bounds.height(), result);
+    SkRect srcRect;
+    src.getBounds(&srcRect);
+    SkRect dstRect = srcRect;
+    dstRect.offset(SkIntToScalar(colorOffset.fX), SkIntToScalar(colorOffset.fY));
+    context->drawRectToRect(paint, srcRect, dstRect);
+    return SkImageFilterUtils::WrapTexture(dst, src.width(), src.height(), result);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -370,18 +327,13 @@ GrDisplacementMapEffect::GrDisplacementMapEffect(
                              SkScalar scale,
                              GrTexture* displacement,
                              GrTexture* color)
-    : fDisplacementTransform(kLocal_GrCoordSet, displacement)
-    , fDisplacementAccess(displacement)
-    , fColorTransform(kLocal_GrCoordSet, color)
+    : fDisplacementAccess(displacement)
     , fColorAccess(color)
     , fXChannelSelector(xChannelSelector)
     , fYChannelSelector(yChannelSelector)
     , fScale(scale) {
-    this->addCoordTransform(&fDisplacementTransform);
     this->addTextureAccess(&fDisplacementAccess);
-    this->addCoordTransform(&fColorTransform);
     this->addTextureAccess(&fColorAccess);
-    this->setWillNotUseInputColor();
 }
 
 GrDisplacementMapEffect::~GrDisplacementMapEffect() {
@@ -414,7 +366,7 @@ void GrDisplacementMapEffect::getConstantColorComponents(GrColor*,
 
 GR_DEFINE_EFFECT_TEST(GrDisplacementMapEffect);
 
-GrEffectRef* GrDisplacementMapEffect::TestCreate(SkRandom* random,
+GrEffectRef* GrDisplacementMapEffect::TestCreate(SkMWCRandom* random,
                                                  GrContext*,
                                                  const GrDrawTargetCaps&,
                                                  GrTexture* textures[]) {
@@ -429,7 +381,7 @@ GrEffectRef* GrDisplacementMapEffect::TestCreate(SkRandom* random,
     SkDisplacementMapEffect::ChannelSelectorType yChannelSelector =
         static_cast<SkDisplacementMapEffect::ChannelSelectorType>(
         random->nextRangeU(1, kMaxComponent));
-    SkScalar scale = random->nextRangeScalar(0, 100.0f);
+    SkScalar scale = random->nextRangeScalar(0, SkFloatToScalar(100.0f));
 
     return GrDisplacementMapEffect::Create(xChannelSelector, yChannelSelector, scale,
                                            textures[texIdxDispl], textures[texIdxColor]);
@@ -441,7 +393,9 @@ GrGLDisplacementMapEffect::GrGLDisplacementMapEffect(const GrBackendEffectFactor
                                                      const GrDrawEffect& drawEffect)
     : INHERITED(factory)
     , fXChannelSelector(drawEffect.castEffect<GrDisplacementMapEffect>().xChannelSelector())
-    , fYChannelSelector(drawEffect.castEffect<GrDisplacementMapEffect>().yChannelSelector()) {
+    , fYChannelSelector(drawEffect.castEffect<GrDisplacementMapEffect>().yChannelSelector())
+    , fDisplacementEffectMatrix(kCoordsType)
+    , fColorEffectMatrix(kCoordsType) {
 }
 
 GrGLDisplacementMapEffect::~GrGLDisplacementMapEffect() {
@@ -452,13 +406,20 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
                                          EffectKey key,
                                          const char* outputColor,
                                          const char* inputColor,
-                                         const TransformedCoordsArray& coords,
                                          const TextureSamplerArray& samplers) {
     sk_ignore_unused_variable(inputColor);
 
-    fScaleUni = builder->addUniform(GrGLShaderBuilder::kFragment_Visibility,
+    fScaleUni = builder->addUniform(GrGLShaderBuilder::kFragment_ShaderType,
                                     kVec2f_GrSLType, "Scale");
     const char* scaleUni = builder->getUniformCStr(fScaleUni);
+
+    const char* dCoordsIn;
+    GrSLType dCoordsType = fDisplacementEffectMatrix.emitCode(
+                                builder, key, &dCoordsIn, NULL, "DISPL");
+    const char* cCoordsIn;
+    GrSLType cCoordsType = fColorEffectMatrix.emitCode(
+                                builder, key, &cCoordsIn, NULL, "COLOR");
+
     const char* dColor = "dColor";
     const char* cCoords = "cCoords";
     const char* outOfBounds = "outOfBounds";
@@ -467,7 +428,10 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
                                    // leave room for 32-bit float GPU rounding errors.
 
     builder->fsCodeAppendf("\t\tvec4 %s = ", dColor);
-    builder->fsAppendTextureLookup(samplers[0], coords[0].c_str(), coords[0].type());
+    builder->appendTextureLookup(GrGLShaderBuilder::kFragment_ShaderType,
+                                 samplers[0],
+                                 dCoordsIn,
+                                 dCoordsType);
     builder->fsCodeAppend(";\n");
 
     // Unpremultiply the displacement
@@ -475,7 +439,7 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
                            dColor, dColor, nearZero, dColor, dColor);
 
     builder->fsCodeAppendf("\t\tvec2 %s = %s + %s*(%s.",
-                           cCoords, coords[1].c_str(), scaleUni, dColor);
+                           cCoords, cCoordsIn, scaleUni, dColor);
 
     switch (fXChannelSelector) {
       case SkDisplacementMapEffect::kR_ChannelSelectorType:
@@ -492,7 +456,7 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
         break;
       case SkDisplacementMapEffect::kUnknown_ChannelSelectorType:
       default:
-        SkDEBUGFAIL("Unknown X channel selector");
+        SkASSERT(!"Unknown X channel selector");
     }
 
     switch (fYChannelSelector) {
@@ -510,7 +474,7 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
         break;
       case SkDisplacementMapEffect::kUnknown_ChannelSelectorType:
       default:
-        SkDEBUGFAIL("Unknown Y channel selector");
+        SkASSERT(!"Unknown Y channel selector");
     }
     builder->fsCodeAppend("-vec2(0.5));\t\t");
 
@@ -520,7 +484,10 @@ void GrGLDisplacementMapEffect::emitCode(GrGLShaderBuilder* builder,
         "bool %s = (%s.x < 0.0) || (%s.y < 0.0) || (%s.x > 1.0) || (%s.y > 1.0);\t\t",
         outOfBounds, cCoords, cCoords, cCoords, cCoords);
     builder->fsCodeAppendf("%s = %s ? vec4(0.0) : ", outputColor, outOfBounds);
-    builder->fsAppendTextureLookup(samplers[1], cCoords, coords[1].type());
+    builder->appendTextureLookup(GrGLShaderBuilder::kFragment_ShaderType,
+                                 samplers[1],
+                                 cCoords,
+                                 cCoordsType);
     builder->fsCodeAppend(";\n");
 }
 
@@ -528,7 +495,17 @@ void GrGLDisplacementMapEffect::setData(const GrGLUniformManager& uman,
                                         const GrDrawEffect& drawEffect) {
     const GrDisplacementMapEffect& displacementMap =
         drawEffect.castEffect<GrDisplacementMapEffect>();
+    GrTexture* displTex = displacementMap.texture(0);
     GrTexture* colorTex = displacementMap.texture(1);
+    fDisplacementEffectMatrix.setData(uman,
+                                     GrEffect::MakeDivByTextureWHMatrix(displTex),
+                                     drawEffect,
+                                     displTex);
+    fColorEffectMatrix.setData(uman,
+                               GrEffect::MakeDivByTextureWHMatrix(colorTex),
+                               drawEffect,
+                               colorTex);
+
     SkScalar scaleX = SkScalarDiv(displacementMap.scale(), SkIntToScalar(colorTex->width()));
     SkScalar scaleY = SkScalarDiv(displacementMap.scale(), SkIntToScalar(colorTex->height()));
     uman.set2f(fScaleUni, SkScalarToFloat(scaleX),
@@ -541,9 +518,24 @@ GrGLEffect::EffectKey GrGLDisplacementMapEffect::GenKey(const GrDrawEffect& draw
     const GrDisplacementMapEffect& displacementMap =
         drawEffect.castEffect<GrDisplacementMapEffect>();
 
-    EffectKey xKey = displacementMap.xChannelSelector();
-    EffectKey yKey = displacementMap.yChannelSelector() << SkDisplacementMapEffect::kKeyBits;
+    GrTexture* displTex = displacementMap.texture(0);
+    GrTexture* colorTex = displacementMap.texture(1);
 
-    return xKey | yKey;
+    EffectKey displKey = GrGLEffectMatrix::GenKey(GrEffect::MakeDivByTextureWHMatrix(displTex),
+                                                  drawEffect,
+                                                  kCoordsType,
+                                                  displTex);
+
+    EffectKey colorKey = GrGLEffectMatrix::GenKey(GrEffect::MakeDivByTextureWHMatrix(colorTex),
+                                                  drawEffect,
+                                                  kCoordsType,
+                                                  colorTex);
+
+    colorKey <<= GrGLEffectMatrix::kKeyBits;
+    EffectKey xKey = displacementMap.xChannelSelector() << (2 * GrGLEffectMatrix::kKeyBits);
+    EffectKey yKey = displacementMap.yChannelSelector() << (2 * GrGLEffectMatrix::kKeyBits +
+                                                            SkDisplacementMapEffect::kKeyBits);
+
+    return xKey | yKey | displKey | colorKey;
 }
 #endif

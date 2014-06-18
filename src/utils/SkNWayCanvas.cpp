@@ -168,13 +168,6 @@ bool SkNWayCanvas::clipRegion(const SkRegion& deviceRgn, SkRegion::Op op) {
     return this->INHERITED::clipRegion(deviceRgn, op);
 }
 
-void SkNWayCanvas::clear(SkColor color) {
-    Iter iter(fList);
-    while (iter.next()) {
-        iter->clear(color);
-    }
-}
-
 void SkNWayCanvas::drawPaint(const SkPaint& paint) {
     Iter iter(fList);
     while (iter.next()) {
@@ -190,17 +183,17 @@ void SkNWayCanvas::drawPoints(PointMode mode, size_t count, const SkPoint pts[],
     }
 }
 
-void SkNWayCanvas::drawRect(const SkRect& rect, const SkPaint& paint) {
-    Iter iter(fList);
-    while (iter.next()) {
-        iter->drawRect(rect, paint);
-    }
-}
-
 void SkNWayCanvas::drawOval(const SkRect& rect, const SkPaint& paint) {
     Iter iter(fList);
     while (iter.next()) {
         iter->drawOval(rect, paint);
+    }
+}
+
+void SkNWayCanvas::drawRect(const SkRect& rect, const SkPaint& paint) {
+    Iter iter(fList);
+    while (iter.next()) {
+        iter->drawRect(rect, paint);
     }
 }
 
@@ -227,11 +220,10 @@ void SkNWayCanvas::drawBitmap(const SkBitmap& bitmap, SkScalar x, SkScalar y,
 }
 
 void SkNWayCanvas::drawBitmapRectToRect(const SkBitmap& bitmap, const SkRect* src,
-                                  const SkRect& dst, const SkPaint* paint,
-                                  DrawBitmapRectFlags flags) {
+                                  const SkRect& dst, const SkPaint* paint) {
     Iter iter(fList);
     while (iter.next()) {
-        iter->drawBitmapRectToRect(bitmap, src, dst, paint, flags);
+        iter->drawBitmapRectToRect(bitmap, src, dst, paint);
     }
 }
 
@@ -240,14 +232,6 @@ void SkNWayCanvas::drawBitmapMatrix(const SkBitmap& bitmap, const SkMatrix& m,
     Iter iter(fList);
     while (iter.next()) {
         iter->drawBitmapMatrix(bitmap, m, paint);
-    }
-}
-
-void SkNWayCanvas::drawBitmapNine(const SkBitmap& bitmap, const SkIRect& center,
-                                  const SkRect& dst, const SkPaint* paint) {
-    Iter iter(fList);
-    while (iter.next()) {
-        iter->drawBitmapNine(bitmap, center, dst, paint);
     }
 }
 
@@ -309,13 +293,6 @@ void SkNWayCanvas::drawVertices(VertexMode vmode, int vertexCount,
     while (iter.next()) {
         iter->drawVertices(vmode, vertexCount, vertices, texs, colors, xmode,
                            indices, indexCount, paint);
-    }
-}
-
-void SkNWayCanvas::drawData(const void* data, size_t length) {
-    Iter iter(fList);
-    while (iter.next()) {
-        iter->drawData(data, length);
     }
 }
 

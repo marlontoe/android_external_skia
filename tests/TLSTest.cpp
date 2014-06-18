@@ -6,7 +6,6 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkGraphics.h"
 #include "SkPaint.h"
 #include "SkTLS.h"
@@ -68,7 +67,7 @@ static void testTLSDestructor(void*) {
     SkTLS::Get(FakeCreateTLS, FakeDeleteTLS);
 }
 
-DEF_TEST(TLS, reporter) {
+static void TestTLS(skiatest::Reporter* reporter) {
     // TODO: Disabled for now to work around
     // http://code.google.com/p/skia/issues/detail?id=619
     // ('flaky segfault in TLS test on Shuttle_Ubuntu12 buildbots')
@@ -79,3 +78,6 @@ DEF_TEST(TLS, reporter) {
     test_threads(&testTLSDestructor);
     REPORTER_ASSERT(reporter, 0 == gCounter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("TLS", TLSClass, TestTLS)

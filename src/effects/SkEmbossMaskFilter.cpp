@@ -26,12 +26,6 @@ static inline int pin2byte(int n) {
 SkMaskFilter* SkBlurMaskFilter::CreateEmboss(const SkScalar direction[3],
                                              SkScalar ambient, SkScalar specular,
                                              SkScalar blurRadius) {
-    return SkBlurMaskFilter::CreateEmboss(SkBlurMask::ConvertRadiusToSigma(blurRadius),
-                                          direction, ambient, specular);
-}
-
-SkMaskFilter* SkBlurMaskFilter::CreateEmboss(SkScalar blurSigma, const SkScalar direction[3],
-                                             SkScalar ambient, SkScalar specular) {
     if (direction == NULL) {
         return NULL;
     }
@@ -48,7 +42,7 @@ SkMaskFilter* SkBlurMaskFilter::CreateEmboss(SkScalar blurSigma, const SkScalar 
     light.fAmbient = SkToU8(am);
     light.fSpecular = SkToU8(sp);
 
-    return SkNEW_ARGS(SkEmbossMaskFilter, (blurSigma, light));
+    return SkNEW_ARGS(SkEmbossMaskFilter, (light, blurRadius));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,16 +56,9 @@ static void normalize(SkScalar v[3]) {
     }
 }
 
-SkEmbossMaskFilter::SkEmbossMaskFilter(SkScalar blurSigma, const Light& light)
-    : fLight(light), fBlurSigma(blurSigma) {
-    normalize(fLight.fDirection);
-}
-
 SkEmbossMaskFilter::SkEmbossMaskFilter(const Light& light, SkScalar blurRadius)
-        : fLight(light) {
+        : fLight(light), fBlurRadius(blurRadius) {
     normalize(fLight.fDirection);
-
-    fBlurSigma = SkBlurMask::ConvertRadiusToSigma(blurRadius);
 }
 
 SkMask::Format SkEmbossMaskFilter::getFormat() const {
@@ -79,17 +66,17 @@ SkMask::Format SkEmbossMaskFilter::getFormat() const {
 }
 
 bool SkEmbossMaskFilter::filterMask(SkMask* dst, const SkMask& src,
-                                    const SkMatrix& matrix, SkIPoint* margin) const {
-    SkScalar sigma = matrix.mapRadius(fBlurSigma);
+                            const SkMatrix& matrix, SkIPoint* margin) const {
+    SkScalar radius = matrix.mapRadius(fBlurRadius);
 
-    if (!SkBlurMask::BoxBlur(dst, src, sigma, SkBlurMask::kInner_Style,
-                             SkBlurMask::kLow_Quality)) {
+    if (!SkBlurMask::Blur(dst, src, radius, SkBlurMask::kInner_Style,
+                          SkBlurMask::kLow_Quality)) {
         return false;
     }
 
     dst->fFormat = SkMask::k3D_Format;
     if (margin) {
-        margin->set(SkScalarCeil(3*sigma), SkScalarCeil(3*sigma));
+        margin->set(SkScalarCeil(radius), SkScalarCeil(radius));
     }
 
     if (src.fImage == NULL) {
@@ -132,12 +119,9 @@ bool SkEmbossMaskFilter::filterMask(SkMask* dst, const SkMask& src,
 SkEmbossMaskFilter::SkEmbossMaskFilter(SkFlattenableReadBuffer& buffer)
         : SkMaskFilter(buffer) {
     SkASSERT(buffer.getArrayCount() == sizeof(Light));
-    buffer.readByteArray(&fLight, sizeof(Light));
+    buffer.readByteArray(&fLight);
     SkASSERT(fLight.fPad == 0); // for the font-cache lookup to be clean
-#ifndef DELETE_THIS_CODE_WHEN_SKPS_ARE_REBUILT_AT_V16_AND_ALL_OTHER_INSTANCES_TOO
-    // TODO: Once skps are recaptured in > v15 this SkScalarAbs can be removed
-#endif
-    fBlurSigma = SkScalarAbs(buffer.readScalar());
+    fBlurRadius = buffer.readScalar();
 }
 
 void SkEmbossMaskFilter::flatten(SkFlattenableWriteBuffer& buffer) const {
@@ -146,7 +130,7 @@ void SkEmbossMaskFilter::flatten(SkFlattenableWriteBuffer& buffer) const {
     Light tmpLight = fLight;
     tmpLight.fPad = 0;    // for the font-cache lookup to be clean
     buffer.writeByteArray(&tmpLight, sizeof(tmpLight));
-    buffer.writeScalar(fBlurSigma);
+    buffer.writeScalar(fBlurRadius);
 }
 
 #ifdef SK_DEVELOPER
@@ -164,8 +148,8 @@ void SkEmbossMaskFilter::toString(SkString* str) const {
     str->appendf("ambient: %d specular: %d ",
         fLight.fAmbient, fLight.fSpecular);
 
-    str->append("blurSigma: ");
-    str->appendScalar(fBlurSigma);
+    str->append("blurRadius: ");
+    str->appendScalar(fBlurRadius);
     str->append(")");
 }
 #endif

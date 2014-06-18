@@ -16,29 +16,51 @@
 
 class PictureRecordBench : public SkBenchmark {
 public:
-    PictureRecordBench(const char name[])  {
+    PictureRecordBench(void* param, const char name[]) : INHERITED(param) {
         fName.printf("picture_record_%s", name);
-    }
-
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+        fPictureWidth = SkIntToScalar(PICTURE_WIDTH);
+        fPictureHeight = SkIntToScalar(PICTURE_HEIGHT);
+        fIsRendering = false;
     }
 
     enum {
+        N = SkBENCHLOOP(25), // number of times to create the picture
         PICTURE_WIDTH = 1000,
         PICTURE_HEIGHT = 4000,
     };
 protected:
-    virtual const char* onGetName() SK_OVERRIDE {
+    virtual const char* onGetName() {
         return fName.c_str();
     }
-private:
+
+    virtual void onDraw(SkCanvas*) {
+        int n = (int)(N * this->innerLoopScale());
+        n = SkMax32(1, n);
+
+        for (int i = 0; i < n; i++) {
+
+            SkPicture picture;
+
+            SkCanvas* pCanvas = picture.beginRecording(PICTURE_WIDTH, PICTURE_HEIGHT);
+            recordCanvas(pCanvas);
+
+            // we don't need to draw the picture as the endRecording step will
+            // do the work of transferring the recorded content into a playback
+            // object.
+            picture.endRecording();
+        }
+    }
+
+    virtual void recordCanvas(SkCanvas* canvas) = 0;
+    virtual float innerLoopScale() const { return 1; }
+
     SkString fName;
+    SkScalar fPictureWidth;
+    SkScalar fPictureHeight;
+    SkScalar fTextSize;
+private:
     typedef SkBenchmark INHERITED;
 };
-
-
-static const int kMaxLoopsPerCanvas = 10000;
 
 /*
  *  An SkPicture has internal dictionaries to store bitmaps, matrices, paints,
@@ -47,23 +69,21 @@ static const int kMaxLoopsPerCanvas = 10000;
  */
 class DictionaryRecordBench : public PictureRecordBench {
 public:
-    DictionaryRecordBench() : INHERITED("dictionaries") {}
+    DictionaryRecordBench(void* param)
+        : INHERITED(param, "dictionaries") { }
 
+    enum {
+        M = SkBENCHLOOP(100),   // number of elements in each dictionary
+    };
 protected:
-    virtual void onDraw(const int loops, SkCanvas*) SK_OVERRIDE {
-        SkAutoTDelete<SkPicture> picture;
-        SkCanvas* canvas = NULL;
+    virtual void recordCanvas(SkCanvas* canvas) {
 
-        const SkPoint translateDelta = getTranslateDelta(loops);
+        const SkPoint translateDelta = getTranslateDelta();
 
-        for (int i = 0; i < loops; i++) {
-            if (0 == i % kMaxLoopsPerCanvas) {
-                picture.reset(SkNEW(SkPicture));
-                canvas = picture->beginRecording(PICTURE_WIDTH, PICTURE_HEIGHT);
-            }
+        for (int i = 0; i < M; i++) {
 
             SkColor color = SK_ColorYELLOW + (i % 255);
-            SkIRect rect = SkIRect::MakeWH(i % PICTURE_WIDTH, i % PICTURE_HEIGHT);
+            SkIRect rect = SkIRect::MakeWH(i,i);
 
             canvas->save();
 
@@ -99,7 +119,7 @@ protected:
         }
     }
 
-    SkPoint getTranslateDelta(int M) {
+    SkPoint getTranslateDelta() {
         SkIPoint canvasSize = onGetSize();
         return SkPoint::Make(SkIntToScalar((PICTURE_WIDTH - canvasSize.fX)/M),
                              SkIntToScalar((PICTURE_HEIGHT- canvasSize.fY)/M));
@@ -114,19 +134,18 @@ private:
  */
 class UniquePaintDictionaryRecordBench : public PictureRecordBench {
 public:
-    UniquePaintDictionaryRecordBench() : INHERITED("unique_paint_dictionary") { }
+    UniquePaintDictionaryRecordBench(void* param)
+        : INHERITED(param, "unique_paint_dictionary") { }
 
+    enum {
+        M = SkBENCHLOOP(15000),   // number of unique paint objects
+    };
 protected:
-    virtual void onDraw(const int loops, SkCanvas*) SK_OVERRIDE {
+    virtual float innerLoopScale() const SK_OVERRIDE { return 0.1f; }
+    virtual void recordCanvas(SkCanvas* canvas) {
         SkRandom rand;
-        SkPaint paint;
-        SkAutoTDelete<SkPicture> picture;
-        SkCanvas* canvas = NULL;
-        for (int i = 0; i < loops; i++) {
-            if (0 == i % kMaxLoopsPerCanvas) {
-                picture.reset(SkNEW(SkPicture));
-                canvas = picture->beginRecording(PICTURE_WIDTH, PICTURE_HEIGHT);
-            }
+        for (int i = 0; i < M; i++) {
+            SkPaint paint;
             paint.setColor(rand.nextU());
             canvas->drawPaint(paint);
         }
@@ -146,7 +165,8 @@ private:
  */
 class RecurringPaintDictionaryRecordBench : public PictureRecordBench {
 public:
-    RecurringPaintDictionaryRecordBench() : INHERITED("recurring_paint_dictionary") {
+    RecurringPaintDictionaryRecordBench(void* param)
+        : INHERITED(param, "recurring_paint_dictionary") {
         SkRandom rand;
         for (int i = 0; i < ObjCount; i++) {
             fPaint[i].setColor(rand.nextU());
@@ -154,13 +174,14 @@ public:
     }
 
     enum {
-        ObjCount = 100,  // number of unique paint objects
+        ObjCount = 100,           // number of unique paint objects
+        M = SkBENCHLOOP(50000),   // number of draw iterations
     };
 protected:
-    virtual void onDraw(const int loops, SkCanvas*) SK_OVERRIDE {
-        SkPicture picture;
-        SkCanvas* canvas = picture.beginRecording(PICTURE_WIDTH, PICTURE_HEIGHT);
-        for (int i = 0; i < loops; i++) {
+    virtual float innerLoopScale() const SK_OVERRIDE { return 0.1f; }
+    virtual void recordCanvas(SkCanvas* canvas) {
+
+        for (int i = 0; i < M; i++) {
             canvas->drawPaint(fPaint[i % ObjCount]);
         }
     }
@@ -172,6 +193,10 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new DictionaryRecordBench(); )
-DEF_BENCH( return new UniquePaintDictionaryRecordBench(); )
-DEF_BENCH( return new RecurringPaintDictionaryRecordBench(); )
+static SkBenchmark* Fact0(void* p) { return new DictionaryRecordBench(p); }
+static SkBenchmark* Fact1(void* p) { return new UniquePaintDictionaryRecordBench(p); }
+static SkBenchmark* Fact2(void* p) { return new RecurringPaintDictionaryRecordBench(p); }
+
+static BenchRegistry gReg0(Fact0);
+static BenchRegistry gReg1(Fact1);
+static BenchRegistry gReg2(Fact2);

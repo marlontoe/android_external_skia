@@ -4,9 +4,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "picture_utils.h"
 #include "SkString.h"
 
@@ -47,7 +45,10 @@ static void test_get_basename(skiatest::Reporter* reporter) {
 #endif
 }
 
-DEF_TEST(PictureUtils, reporter) {
+static void TestPictureUtils(skiatest::Reporter* reporter) {
     test_filepath_creation(reporter);
     test_get_basename(reporter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("PictureUtils", PictureUtilsTestClass, TestPictureUtils)

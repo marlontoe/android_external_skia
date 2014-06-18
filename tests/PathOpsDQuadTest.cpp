@@ -5,9 +5,7 @@
  * found in the LICENSE file.
  */
 #include "PathOpsTestCommon.h"
-#include "SkPath.h"
 #include "SkPathOpsQuad.h"
-#include "SkRRect.h"
 #include "Test.h"
 
 static const SkDQuad tests[] = {
@@ -23,7 +21,7 @@ static const SkDPoint inPoint[]= {
     {1,   0.8},
     {1.8, 1},
     {1.5, 1},
-    {0.4999, 0.5},  // was 0.5, 0.5; points on the hull are considered outside
+    {0.5, 0.5},
 };
 
 static const SkDPoint outPoint[]= {
@@ -53,16 +51,5 @@ static void PathOpsDQuadTest(skiatest::Reporter* reporter) {
     }
 }
 
-static void PathOpsRRectTest(skiatest::Reporter* reporter) {
-    SkPath path;
-    SkRRect rRect;
-    SkRect rect = {135, 143, 250, 177};
-    SkVector radii[4] = {{8, 8}, {8, 8}, {0, 0}, {0, 0}};
-    rRect.setRectRadii(rect, radii);
-    path.addRRect(rRect);
-}
-
 #include "TestClassDef.h"
 DEFINE_TESTCLASS_SHORT(PathOpsDQuadTest)
-
-DEFINE_TESTCLASS_SHORT(PathOpsRRectTest)

@@ -1,7 +1,6 @@
-#
 {
   'variables': {
-    #manually set sample_pdf_file_viewer to 1 to have the PdfViewer in SampleApp
+    #manaully set sample_pdf_file_viewer to 1 to have the PdfViewer in SampleApp
     'sample_pdf_file_viewer%': 0,
   },
   'targets': [
@@ -12,8 +11,6 @@
       'include_dirs' : [
         '../src/core',
         '../src/effects', #needed for BlurMask.h
-        '../src/images',
-        '../src/lazy',
         '../gm',       # needed to pull gm.h
         '../samplecode', # To pull SampleApp.h and SampleCode.h
         '../src/pipe/utils', # For TiledPipeController
@@ -54,7 +51,6 @@
         '../samplecode/SampleCamera.cpp',
         '../samplecode/SampleChart.cpp',
         '../samplecode/SampleCircle.cpp',
-        '../samplecode/SampleClock.cpp',
         '../samplecode/SampleClip.cpp',
         '../samplecode/SampleCode.h',
         '../samplecode/SampleColorFilter.cpp',
@@ -72,7 +68,6 @@
         '../samplecode/SampleFillType.cpp',
         '../samplecode/SampleFilter.cpp',
         '../samplecode/SampleFilter2.cpp',
-        '../samplecode/SampleFilterFuzz.cpp',
         '../samplecode/SampleFontCache.cpp',
         '../samplecode/SampleFontScalerTest.cpp',
         '../samplecode/SampleFuzz.cpp',
@@ -107,7 +102,6 @@
         '../samplecode/SampleShaderText.cpp',
         '../samplecode/SampleSkLayer.cpp',
         '../samplecode/SampleSlides.cpp',
-        '../samplecode/SampleStringArt.cpp',
         '../samplecode/SampleStrokePath.cpp',
         '../samplecode/SampleTests.cpp',
         '../samplecode/SampleText.cpp',
@@ -167,10 +161,10 @@
            'SAMPLE_PDF_FILE_VIEWER',
          ],
          'dependencies': [
-           'pdfviewer_lib.gyp:pdfviewer_lib',
+           'pdfviewer.gyp:libpdfviewer',
          ],
          'include_dirs' : [
-           '../experimental/PdfViewer/inc',
+           '../experimental/PdfViewer/',
          ],
          'sources': [
            '../samplecode/SamplePdfFileViewer.cpp',
@@ -306,8 +300,8 @@
           ],
         }],
         [ 'skia_gpu == 1', {
-          'dependencies': [
-            'gputest.gyp:skgputest',
+          'include_dirs': [
+            '../src/gpu', # To pull gl/GrGLUtil.h
           ],
         }],
         [ 'skia_os == "nacl"', {
@@ -324,3 +318,9 @@
     },
   ],
 }
+
+# Local Variables:
+# tab-width:2
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=2 shiftwidth=2:

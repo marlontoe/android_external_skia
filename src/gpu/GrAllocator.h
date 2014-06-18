@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2010 Google Inc.
  *
@@ -5,15 +6,16 @@
  * found in the LICENSE file.
  */
 
+
+
 #ifndef GrAllocator_DEFINED
 #define GrAllocator_DEFINED
 
+#include "GrNoncopyable.h"
 #include "GrConfig.h"
-#include "GrTypes.h"
 #include "SkTArray.h"
-#include "SkTypes.h"
 
-class GrAllocator : public SkNoncopyable {
+class GrAllocator : GrNoncopyable {
 public:
     ~GrAllocator() {
         reset();
@@ -33,26 +35,10 @@ public:
             fItemsPerBlock(itemsPerBlock),
             fOwnFirstBlock(NULL == initialBlock),
             fCount(0) {
-        SkASSERT(itemsPerBlock > 0);
+        GrAssert(itemsPerBlock > 0);
         fBlockSize = fItemSize * fItemsPerBlock;
         fBlocks.push_back() = initialBlock;
-        SkDEBUGCODE(if (!fOwnFirstBlock) {*((char*)initialBlock+fBlockSize-1)='a';} );
-    }
-
-    /*
-     * Set first block of memory to write into.  Must be called before any other methods.
-     * This requires that you have passed NULL in the constructor.
-     *
-     * @param   initialBlock    optional memory to use for the first block.
-     *                          Must be at least itemSize*itemsPerBlock sized.
-     *                          Caller is responsible for freeing this memory.
-     */
-    void setInitialBlock(void* initialBlock) {
-        SkASSERT(0 == fCount);
-        SkASSERT(1 == fBlocks.count());
-        SkASSERT(NULL == fBlocks.back());
-        fOwnFirstBlock = false;
-        fBlocks.back() = initialBlock;
+        GR_DEBUGCODE(if (!fOwnFirstBlock) {*((char*)initialBlock+fBlockSize-1)='a';} );
     }
 
     /**
@@ -65,9 +51,9 @@ public:
         // we always have at least one block
         if (0 == indexInBlock) {
             if (0 != fCount) {
-                fBlocks.push_back() = sk_malloc_throw(fBlockSize);
+                fBlocks.push_back() = GrMalloc(fBlockSize);
             } else if (fOwnFirstBlock) {
-                fBlocks[0] = sk_malloc_throw(fBlockSize);
+                fBlocks[0] = GrMalloc(fBlockSize);
             }
         }
         void* ret = (char*)fBlocks[fCount/fItemsPerBlock] +
@@ -83,10 +69,10 @@ public:
         int blockCount = GrMax((unsigned)1,
                                GrUIDivRoundUp(fCount, fItemsPerBlock));
         for (int i = 1; i < blockCount; ++i) {
-            sk_free(fBlocks[i]);
+            GrFree(fBlocks[i]);
         }
         if (fOwnFirstBlock) {
-            sk_free(fBlocks[0]);
+            GrFree(fBlocks[0]);
             fBlocks[0] = NULL;
         }
         fBlocks.pop_back_n(blockCount-1);
@@ -109,7 +95,7 @@ public:
      * access last item, only call if count() != 0
      */
     void* back() {
-        SkASSERT(fCount);
+        GrAssert(fCount);
         return (*this)[fCount-1];
     }
 
@@ -117,7 +103,7 @@ public:
      * access last item, only call if count() != 0
      */
     const void* back() const {
-        SkASSERT(fCount);
+        GrAssert(fCount);
         return (*this)[fCount-1];
     }
 
@@ -125,7 +111,7 @@ public:
      * access item by index.
      */
     void* operator[] (int i) {
-        SkASSERT(i >= 0 && i < fCount);
+        GrAssert(i >= 0 && i < fCount);
         return (char*)fBlocks[i / fItemsPerBlock] +
                fItemSize * (i % fItemsPerBlock);
     }
@@ -134,7 +120,7 @@ public:
      * access item by index.
      */
     const void* operator[] (int i) const {
-        SkASSERT(i >= 0 && i < fCount);
+        GrAssert(i >= 0 && i < fCount);
         return (const char*)fBlocks[i / fItemsPerBlock] +
                fItemSize * (i % fItemsPerBlock);
     }
@@ -149,11 +135,12 @@ private:
     bool                                    fOwnFirstBlock;
     int                                     fCount;
 
-    typedef SkNoncopyable INHERITED;
+    typedef GrNoncopyable INHERITED;
 };
 
 template <typename T>
-class GrTAllocator : public SkNoncopyable {
+class GrTAllocator : GrNoncopyable {
+
 public:
     virtual ~GrTAllocator() { this->reset(); };
 
@@ -161,6 +148,9 @@ public:
      * Create an allocator
      *
      * @param   itemsPerBlock   the number of items to allocate at once
+     * @param   initialBlock    optional memory to use for the first block.
+     *                          Must be at least size(T)*itemsPerBlock sized.
+     *                          Caller is responsible for freeing this memory.
      */
     explicit GrTAllocator(int itemsPerBlock)
         : fAllocator(sizeof(T), itemsPerBlock, NULL) {}
@@ -172,14 +162,14 @@ public:
      */
     T& push_back() {
         void* item = fAllocator.push_back();
-        SkASSERT(NULL != item);
+        GrAssert(NULL != item);
         SkNEW_PLACEMENT(item, T);
         return *(T*)item;
     }
 
     T& push_back(const T& t) {
         void* item = fAllocator.push_back();
-        SkASSERT(NULL != item);
+        GrAssert(NULL != item);
         SkNEW_PLACEMENT_ARGS(item, T, (t));
         return *(T*)item;
     }
@@ -236,20 +226,13 @@ public:
     }
 
 protected:
-    /*
-     * Set first block of memory to write into.  Must be called before any other methods.
-     *
-     * @param   initialBlock    optional memory to use for the first block.
-     *                          Must be at least size(T)*itemsPerBlock sized.
-     *                          Caller is responsible for freeing this memory.
-     */
-    void setInitialBlock(void* initialBlock) {
-        fAllocator.setInitialBlock(initialBlock);
+    GrTAllocator(int itemsPerBlock, void* initialBlock)
+        : fAllocator(sizeof(T), itemsPerBlock, initialBlock) {
     }
 
 private:
     GrAllocator fAllocator;
-    typedef SkNoncopyable INHERITED;
+    typedef GrNoncopyable INHERITED;
 };
 
 template <int N, typename T> class GrSTAllocator : public GrTAllocator<T> {
@@ -257,8 +240,7 @@ private:
     typedef GrTAllocator<T> INHERITED;
 
 public:
-    GrSTAllocator() : INHERITED(N) {
-        this->setInitialBlock(fStorage.get());
+    GrSTAllocator() : INHERITED(N, fStorage.get()) {
     }
 
 private:

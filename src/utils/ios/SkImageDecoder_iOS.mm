@@ -54,11 +54,11 @@ bool SkImageDecoder_iOS::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
 
 /////////////////////////////////////////////////////////////////////////
 
-SkImageDecoder* SkImageDecoder::Factory(SkStreamRewindable* stream) {
+SkImageDecoder* SkImageDecoder::Factory(SkStream* stream) {
     return new SkImageDecoder_iOS;
 }
 
-SkMovie* SkMovie::DecodeStream(SkStreamRewindable* stream) {
+SkMovie* SkMovie::DecodeStream(SkStream* stream) {
     return NULL;
 }
 

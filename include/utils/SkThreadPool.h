@@ -9,10 +9,10 @@
 #define SkThreadPool_DEFINED
 
 #include "SkCondVar.h"
-#include "SkRunnable.h"
 #include "SkTDArray.h"
 #include "SkTInternalLList.h"
 
+class SkRunnable;
 class SkThread;
 
 class SkThreadPool {
@@ -31,11 +31,6 @@ public:
      */
     void add(SkRunnable*);
 
-    /**
-     * Block until all added SkRunnables have completed.  Once called, calling add() is undefined.
-     */
-    void wait();
-
  private:
     struct LinkedRunnable {
         // Unowned pointer.
@@ -45,17 +40,10 @@ public:
         SK_DECLARE_INTERNAL_LLIST_INTERFACE(LinkedRunnable);
     };
 
-    enum State {
-        kRunning_State,  // Normal case.  We've been constructed and no one has called wait().
-        kWaiting_State,  // wait has been called, but there still might be work to do or being done.
-        kHalting_State,  // There's no work to do and no thread is busy.  All threads can shut down.
-    };
-
-    SkTInternalLList<LinkedRunnable> fQueue;
-    SkCondVar                        fReady;
-    SkTDArray<SkThread*>             fThreads;
-    State                            fState;
-    int                              fBusyThreads;
+    SkTInternalLList<LinkedRunnable>    fQueue;
+    SkCondVar                           fReady;
+    SkTDArray<SkThread*>                fThreads;
+    bool                            fDone;
 
     static void Loop(void*);  // Static because we pass in this.
 };

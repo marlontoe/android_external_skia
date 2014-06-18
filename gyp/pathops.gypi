@@ -52,6 +52,7 @@
     '../src/pathops/SkPathOpsPoint.h',
     '../src/pathops/SkPathOpsQuad.h',
     '../src/pathops/SkPathOpsRect.h',
+    '../src/pathops/SkPathOpsSpan.h',
     '../src/pathops/SkPathOpsTriangle.h',
     '../src/pathops/SkPathOpsTypes.h',
     '../src/pathops/SkPathWriter.h',

@@ -60,18 +60,12 @@ public:
         fBlitter = NULL;
     }
     SkAutoBlitterChoose(const SkBitmap& device, const SkMatrix& matrix,
-                        const SkPaint& paint, bool drawCoverage = false) {
+                        const SkPaint& paint) {
         fBlitter = SkBlitter::Choose(device, matrix, paint,
-                                     fStorage, sizeof(fStorage), drawCoverage);
+                                     fStorage, sizeof(fStorage));
     }
 
-    ~SkAutoBlitterChoose() {
-        if ((void*)fBlitter == (void*)fStorage) {
-            fBlitter->~SkBlitter();
-        } else {
-            SkDELETE(fBlitter);
-        }
-    }
+    ~SkAutoBlitterChoose();
 
     SkBlitter*  operator->() { return fBlitter; }
     SkBlitter*  get() const { return fBlitter; }
@@ -87,7 +81,14 @@ private:
     SkBlitter*  fBlitter;
     uint32_t    fStorage[kBlitterStorageLongCount];
 };
-#define SkAutoBlitterChoose(...) SK_REQUIRE_LOCAL_VAR(SkAutoBlitterChoose)
+
+SkAutoBlitterChoose::~SkAutoBlitterChoose() {
+    if ((void*)fBlitter == (void*)fStorage) {
+        fBlitter->~SkBlitter();
+    } else {
+        SkDELETE(fBlitter);
+    }
+}
 
 /**
  *  Since we are providing the storage for the shader (to avoid the perf cost
@@ -127,7 +128,6 @@ private:
     SkPaint     fPaint; // copy of caller's paint (which we then modify)
     uint32_t    fStorage[kBlitterStorageLongCount];
 };
-#define SkAutoBitmapShaderInstall(...) SK_REQUIRE_LOCAL_VAR(SkAutoBitmapShaderInstall)
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1025,11 +1025,24 @@ static bool xfermodeSupportsCoverageAsAlpha(SkXfermode* xfer) {
     }
 }
 
-bool SkDrawTreatAAStrokeAsHairline(SkScalar strokeWidth, const SkMatrix& matrix,
-                                   SkScalar* coverage) {
-    SkASSERT(strokeWidth > 0);
-    // We need to try to fake a thick-stroke with a modulated hairline.
+bool SkDrawTreatAsHairline(const SkPaint& paint, const SkMatrix& matrix,
+                           SkScalar* coverage) {
+    SkASSERT(coverage);
+    if (SkPaint::kStroke_Style != paint.getStyle()) {
+        return false;
+    }
+    SkScalar strokeWidth = paint.getStrokeWidth();
+    if (0 == strokeWidth) {
+        *coverage = SK_Scalar1;
+        return true;
+    }
 
+    // if we get here, we need to try to fake a thick-stroke with a modulated
+    // hairline
+
+    if (!paint.isAntiAlias()) {
+        return false;
+    }
     if (matrix.hasPerspective()) {
         return false;
     }
@@ -1041,9 +1054,7 @@ bool SkDrawTreatAAStrokeAsHairline(SkScalar strokeWidth, const SkMatrix& matrix,
     SkScalar len0 = fast_len(dst[0]);
     SkScalar len1 = fast_len(dst[1]);
     if (len0 <= SK_Scalar1 && len1 <= SK_Scalar1) {
-        if (NULL != coverage) {
-            *coverage = SkScalarAve(len0, len1);
-        }
+        *coverage = SkScalarAve(len0, len1);
         return true;
     }
     return false;
@@ -1095,8 +1106,7 @@ DRAW_PATH:
 }
 
 void SkDraw::drawPath(const SkPath& origSrcPath, const SkPaint& origPaint,
-                      const SkMatrix* prePathMatrix, bool pathIsMutable,
-                      bool drawCoverage) const {
+                      const SkMatrix* prePathMatrix, bool pathIsMutable) const {
     SkDEBUGCODE(this->validate();)
 
     // nothing to draw
@@ -1185,7 +1195,7 @@ void SkDraw::drawPath(const SkPath& origSrcPath, const SkPaint& origPaint,
     // transform the path into device space
     pathPtr->transform(*matrix, devPathPtr);
 
-    SkAutoBlitterChoose blitter(*fBitmap, *fMatrix, *paint, drawCoverage);
+    SkAutoBlitterChoose blitter(*fBitmap, *fMatrix, *paint);
 
     if (paint->getMaskFilter()) {
         SkPaint::Style style = doFill ? SkPaint::kFill_Style :
@@ -1229,7 +1239,7 @@ static bool just_translate(const SkMatrix& matrix, const SkBitmap& bitmap) {
 
 void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap,
                               const SkPaint& paint) const {
-    SkASSERT(bitmap.config() == SkBitmap::kA8_Config);
+    SkASSERT(bitmap.getConfig() == SkBitmap::kA8_Config);
 
     if (just_translate(*fMatrix, bitmap)) {
         int ix = SkScalarRound(fMatrix->getTranslateX());
@@ -1337,7 +1347,7 @@ void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
     // nothing to draw
     if (fRC->isEmpty() ||
             bitmap.width() == 0 || bitmap.height() == 0 ||
-            bitmap.config() == SkBitmap::kNo_Config) {
+            bitmap.getConfig() == SkBitmap::kNo_Config) {
         return;
     }
 
@@ -1363,7 +1373,7 @@ void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
         }
     }
 
-    if (bitmap.config() != SkBitmap::kA8_Config &&
+    if (bitmap.getConfig() != SkBitmap::kA8_Config &&
             just_translate(matrix, bitmap)) {
         //
         // It is safe to call lock pixels now, since we know the matrix is
@@ -1396,7 +1406,7 @@ void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
     SkDraw draw(*this);
     draw.fMatrix = &matrix;
 
-    if (bitmap.config() == SkBitmap::kA8_Config) {
+    if (bitmap.getConfig() == SkBitmap::kA8_Config) {
         draw.drawBitmapAsMask(bitmap, paint);
     } else {
         SkAutoBitmapShaderInstall install(bitmap, paint);
@@ -1416,7 +1426,7 @@ void SkDraw::drawSprite(const SkBitmap& bitmap, int x, int y,
     // nothing to draw
     if (fRC->isEmpty() ||
             bitmap.width() == 0 || bitmap.height() == 0 ||
-            bitmap.config() == SkBitmap::kNo_Config) {
+            bitmap.getConfig() == SkBitmap::kNo_Config) {
         return;
     }
 
@@ -1753,30 +1763,10 @@ void SkDraw::drawText(const char text[], size_t byteLength,
 
     SkDrawCacheProc glyphCacheProc = paint.getDrawCacheProc();
 
-#if SK_DISTANCEFIELD_FONTS
-    const SkMatrix* ctm = fMatrix;
-    const SkPaint* paintRef = &paint;
-    SkPaint paintCopy;
-    uint32_t procFlags = fProcs ? fProcs->fFlags : 0;
-    if (procFlags & SkDrawProcs::kUseScaledGlyphs_Flag) {
-        paintCopy = paint;
-        paintCopy.setTextSize(SkDrawProcs::kBaseDFFontSize);
-        paintCopy.setLCDRenderText(false);
-        paintRef = &paintCopy;
-    }
-    if (procFlags & SkDrawProcs::kSkipBakedGlyphTransform_Flag) {
-        ctm = NULL;
-    }
-    SkAutoGlyphCache    autoCache(*paintRef, &fDevice->fLeakyProperties, ctm);
-#else
     SkAutoGlyphCache    autoCache(paint, &fDevice->fLeakyProperties, fMatrix);
-#endif
     SkGlyphCache*       cache = autoCache.getCache();
 
     // transform our starting point
-#if SK_DISTANCEFIELD_FONTS
-    if (!(procFlags & SkDrawProcs::kSkipBakedGlyphTransform_Flag))
-#endif
     {
         SkPoint loc;
         fMatrix->mapXY(x, y, &loc);
@@ -1835,41 +1825,16 @@ void SkDraw::drawText(const char text[], size_t byteLength,
     SkFixed fx = SkScalarToFixed(x) + d1g.fHalfSampleX;
     SkFixed fy = SkScalarToFixed(y) + d1g.fHalfSampleY;
 
-#if SK_DISTANCEFIELD_FONTS
-    SkFixed fixedScale;
-    if (procFlags & SkDrawProcs::kUseScaledGlyphs_Flag) {
-        fixedScale = SkScalarToFixed(paint.getTextSize()/(float)SkDrawProcs::kBaseDFFontSize);
-    }
-#endif
     while (text < stop) {
         const SkGlyph& glyph = glyphCacheProc(cache, &text, fx & fxMask, fy & fyMask);
 
-#if SK_DISTANCEFIELD_FONTS
-        if (procFlags & SkDrawProcs::kUseScaledGlyphs_Flag) {
-            fx += SkFixedMul_portable(autokern.adjust(glyph), fixedScale);
-        } else {
-            fx += autokern.adjust(glyph);
-        }
-#else
         fx += autokern.adjust(glyph);
-#endif
 
         if (glyph.fWidth) {
             proc(d1g, fx, fy, glyph);
         }
-
-#if SK_DISTANCEFIELD_FONTS
-        if (procFlags & SkDrawProcs::kUseScaledGlyphs_Flag) {
-            fx += SkFixedMul_portable(glyph.fAdvanceX, fixedScale);
-            fy += SkFixedMul_portable(glyph.fAdvanceY, fixedScale);
-        } else {
-            fx += glyph.fAdvanceX;
-            fy += glyph.fAdvanceY;
-        }
-#else
         fx += glyph.fAdvanceX;
         fy += glyph.fAdvanceY;
-#endif
     }
 }
 
@@ -1878,16 +1843,19 @@ void SkDraw::drawText(const char text[], size_t byteLength,
 //   e.g. subpixel doesn't round
 typedef void (*AlignProc)(const SkPoint&, const SkGlyph&, SkIPoint*);
 
-static void leftAlignProc(const SkPoint& loc, const SkGlyph& glyph, SkIPoint* dst) {
+static void leftAlignProc(const SkPoint& loc, const SkGlyph& glyph,
+                          SkIPoint* dst) {
     dst->set(SkScalarToFixed(loc.fX), SkScalarToFixed(loc.fY));
 }
 
-static void centerAlignProc(const SkPoint& loc, const SkGlyph& glyph, SkIPoint* dst) {
+static void centerAlignProc(const SkPoint& loc, const SkGlyph& glyph,
+                            SkIPoint* dst) {
     dst->set(SkScalarToFixed(loc.fX) - (glyph.fAdvanceX >> 1),
              SkScalarToFixed(loc.fY) - (glyph.fAdvanceY >> 1));
 }
 
-static void rightAlignProc(const SkPoint& loc, const SkGlyph& glyph, SkIPoint* dst) {
+static void rightAlignProc(const SkPoint& loc, const SkGlyph& glyph,
+                           SkIPoint* dst) {
     dst->set(SkScalarToFixed(loc.fX) - glyph.fAdvanceX,
              SkScalarToFixed(loc.fY) - glyph.fAdvanceY);
 }
@@ -1895,32 +1863,6 @@ static void rightAlignProc(const SkPoint& loc, const SkGlyph& glyph, SkIPoint* d
 static AlignProc pick_align_proc(SkPaint::Align align) {
     static const AlignProc gProcs[] = {
         leftAlignProc, centerAlignProc, rightAlignProc
-    };
-
-    SkASSERT((unsigned)align < SK_ARRAY_COUNT(gProcs));
-
-    return gProcs[align];
-}
-
-typedef void (*AlignProc_scalar)(const SkPoint&, const SkGlyph&, SkPoint*);
-
-static void leftAlignProc_scalar(const SkPoint& loc, const SkGlyph& glyph, SkPoint* dst) {
-    dst->set(loc.fX, loc.fY);
-}
-
-static void centerAlignProc_scalar(const SkPoint& loc, const SkGlyph& glyph, SkPoint* dst) {
-    dst->set(loc.fX - SkFixedToScalar(glyph.fAdvanceX >> 1),
-             loc.fY - SkFixedToScalar(glyph.fAdvanceY >> 1));
-}
-
-static void rightAlignProc_scalar(const SkPoint& loc, const SkGlyph& glyph, SkPoint* dst) {
-    dst->set(loc.fX - SkFixedToScalar(glyph.fAdvanceX),
-             loc.fY - SkFixedToScalar(glyph.fAdvanceY));
-}
-
-static AlignProc_scalar pick_align_proc_scalar(SkPaint::Align align) {
-    static const AlignProc_scalar gProcs[] = {
-        leftAlignProc_scalar, centerAlignProc_scalar, rightAlignProc_scalar
     };
 
     SkASSERT((unsigned)align < SK_ARRAY_COUNT(gProcs));
@@ -2004,7 +1946,7 @@ void SkDraw::drawPosText_asPaths(const char text[], size_t byteLength,
     SkGlyphCache*       cache = autoCache.getCache();
 
     const char*        stop = text + byteLength;
-    AlignProc_scalar   alignProc = pick_align_proc_scalar(paint.getTextAlign());
+    AlignProc          alignProc = pick_align_proc(paint.getTextAlign());
     TextMapState       tms(SkMatrix::I(), constY);
     TextMapState::Proc tmsProc = tms.pickProc(scalarsPerPosition);
 
@@ -2014,11 +1956,11 @@ void SkDraw::drawPosText_asPaths(const char text[], size_t byteLength,
             const SkPath* path = cache->findPath(glyph);
             if (path) {
                 tmsProc(tms, pos);
-                SkPoint loc;
-                alignProc(tms.fLoc, glyph, &loc);
+                SkIPoint fixedLoc;
+                alignProc(tms.fLoc, glyph, &fixedLoc);
 
-                matrix[SkMatrix::kMTransX] = loc.fX;
-                matrix[SkMatrix::kMTransY] = loc.fY;
+                matrix[SkMatrix::kMTransX] = SkFixedToScalar(fixedLoc.fX);
+                matrix[SkMatrix::kMTransY] = SkFixedToScalar(fixedLoc.fY);
                 if (fDevice) {
                     fDevice->drawPath(*this, *path, paint, &matrix, false);
                 } else {
@@ -2050,23 +1992,7 @@ void SkDraw::drawPosText(const char text[], size_t byteLength,
     }
 
     SkDrawCacheProc     glyphCacheProc = paint.getDrawCacheProc();
-#if SK_DISTANCEFIELD_FONTS
-    const SkMatrix* ctm = fMatrix;
-    const SkPaint* paintRef = &paint;
-    SkPaint paintCopy;
-    uint32_t procFlags = fProcs ? fProcs->fFlags : 0;
-    if (procFlags & SkDrawProcs::kUseScaledGlyphs_Flag) {
-        paintCopy = paint;
-        paintCopy.setTextSize(SkDrawProcs::kBaseDFFontSize);
-        paintRef = &paintCopy;
-    }
-    if (procFlags & SkDrawProcs::kSkipBakedGlyphTransform_Flag) {
-        ctm = &SkMatrix::I();
-    }
-    SkAutoGlyphCache    autoCache(*paintRef, &fDevice->fLeakyProperties, ctm);
-#else
     SkAutoGlyphCache    autoCache(paint, &fDevice->fLeakyProperties, fMatrix);
-#endif
     SkGlyphCache*       cache = autoCache.getCache();
 
     SkAAClipBlitterWrapper wrapper;
@@ -2085,11 +2011,7 @@ void SkDraw::drawPosText(const char text[], size_t byteLength,
     AlignProc          alignProc = pick_align_proc(paint.getTextAlign());
     SkDraw1Glyph       d1g;
     SkDraw1Glyph::Proc proc = d1g.init(this, blitter, cache, paint);
-#if SK_DISTANCEFIELD_FONTS
-    TextMapState       tms(*ctm, constY);
-#else
     TextMapState       tms(*fMatrix, constY);
-#endif
     TextMapState::Proc tmsProc = tms.pickProc(scalarsPerPosition);
 
     if (cache->isSubpixel()) {
@@ -2112,16 +2034,8 @@ void SkDraw::drawPosText(const char text[], size_t byteLength,
 
         if (SkPaint::kLeft_Align == paint.getTextAlign()) {
             while (text < stop) {
-#if SK_DISTANCEFIELD_FONTS
-                if (procFlags & SkDrawProcs::kSkipBakedGlyphTransform_Flag) {
-                    tms.fLoc.fX = *pos;
-                    tms.fLoc.fY = *(pos+1);
-                } else {
-                    tmsProc(tms, pos);
-                }
-#else
                 tmsProc(tms, pos);
-#endif
+
                 SkFixed fx = SkScalarToFixed(tms.fLoc.fX) + d1g.fHalfSampleX;
                 SkFixed fy = SkScalarToFixed(tms.fLoc.fY) + d1g.fHalfSampleY;
 
@@ -2331,6 +2245,69 @@ void SkDraw::drawTextOnPath(const char text[], size_t byteLength,
         }
     }
 }
+
+#ifdef SK_BUILD_FOR_ANDROID
+void SkDraw::drawPosTextOnPath(const char text[], size_t byteLength,
+                               const SkPoint pos[], const SkPaint& paint,
+                               const SkPath& path, const SkMatrix* matrix) const {
+    // nothing to draw
+    if (text == NULL || byteLength == 0 || fRC->isEmpty()) {
+        return;
+    }
+
+    SkMatrix scaledMatrix;
+    SkPathMeasure meas(path, false);
+
+    SkMeasureCacheProc glyphCacheProc = paint.getMeasureCacheProc(
+            SkPaint::kForward_TextBufferDirection, true);
+
+    // Copied (modified) from SkTextToPathIter constructor to setup paint
+    SkPaint tempPaint(paint);
+
+    tempPaint.setLinearText(true);
+    tempPaint.setMaskFilter(NULL); // don't want this affecting our path-cache lookup
+
+    if (tempPaint.getPathEffect() == NULL && !(tempPaint.getStrokeWidth() > 0
+            && tempPaint.getStyle() != SkPaint::kFill_Style)) {
+        tempPaint.setStyle(SkPaint::kFill_Style);
+        tempPaint.setPathEffect(NULL);
+    }
+    // End copied from SkTextToPathIter constructor
+
+    // detach cache
+    SkGlyphCache* cache = tempPaint.detachCache(NULL, NULL);
+
+    // Must set scale, even if 1
+    SkScalar scale = SK_Scalar1;
+    scaledMatrix.setScale(scale, scale);
+
+    // Loop over all glyph ids
+    for (const char* stop = text + byteLength; text < stop; pos++) {
+
+        const SkGlyph& glyph = glyphCacheProc(cache, &text);
+        SkPath tmp;
+
+        const SkPath* glyphPath = cache->findPath(glyph);
+        if (glyphPath == NULL) {
+            continue;
+        }
+
+        SkMatrix m(scaledMatrix);
+        m.postTranslate(pos->fX, 0);
+
+        if (matrix) {
+            m.postConcat(*matrix);
+        }
+
+        morphpath(&tmp, *glyphPath, meas, m);
+        this->drawPath(tmp, tempPaint);
+
+    }
+
+    // re-attach cache
+    SkGlyphCache::AttachCache(cache);
+}
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 

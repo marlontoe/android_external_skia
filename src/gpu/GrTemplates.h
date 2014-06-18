@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2010 Google Inc.
  *
@@ -5,10 +6,11 @@
  * found in the LICENSE file.
  */
 
+
 #ifndef GrTemplates_DEFINED
 #define GrTemplates_DEFINED
 
-#include "SkTypes.h"
+#include "GrNoncopyable.h"
 
 /**
  *  Use to cast a ptr to a different type, and maintain strict-aliasing
@@ -35,7 +37,7 @@ template <typename Dst, typename Src> Dst GrTCast(Src src) {
  *      ...
  * }  // fCount is restored
  */
-template <typename T> class GrAutoTRestore : public SkNoncopyable {
+template <typename T> class GrAutoTRestore : public GrNoncopyable {
 public:
     GrAutoTRestore() : fPtr(NULL), fVal() {}
 

@@ -9,13 +9,13 @@
 #define GrSWMaskHelper_DEFINED
 
 #include "GrColor.h"
-#include "GrDrawState.h"
+#include "SkMatrix.h"
+#include "GrNoncopyable.h"
 #include "SkBitmap.h"
 #include "SkDraw.h"
-#include "SkMatrix.h"
 #include "SkRasterClip.h"
 #include "SkRegion.h"
-#include "SkTypes.h"
+#include "GrDrawState.h"
 
 class GrAutoScratchTexture;
 class GrContext;
@@ -38,7 +38,7 @@ class GrDrawTarget;
  * The result of this process will be the final mask (on the GPU) in the
  * upper left hand corner of the texture.
  */
-class GrSWMaskHelper : public SkNoncopyable {
+class GrSWMaskHelper : public GrNoncopyable {
 public:
     GrSWMaskHelper(GrContext* context)
     : fContext(context) {
@@ -101,7 +101,7 @@ private:
     SkDraw          fDraw;
     SkRasterClip    fRasterClip;
 
-    typedef SkNoncopyable INHERITED;
+    typedef GrNoncopyable INHERITED;
 };
 
 #endif // GrSWMaskHelper_DEFINED

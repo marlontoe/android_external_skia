@@ -29,7 +29,12 @@ public:
         int fStencilBits;
     };
 
-    bool attach(SkBackEndTypes attachType, int msaaSampleCount, AttachmentInfo* info);
+    bool attach(SkBackEndTypes /* attachType */, int /* msaaSampleCount */, AttachmentInfo* info) {
+        // These are the values requested in SkiaSampleView.java
+        info->fSampleCount = 0;
+        info->fStencilBits = 8;
+        return true;
+    }
     void detach() {}
     void present() {}
 

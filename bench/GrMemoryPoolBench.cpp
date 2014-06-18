@@ -17,6 +17,7 @@
 // change this to 0 to compare GrMemoryPool to default new / delete
 #define OVERRIDE_NEW    1
 
+namespace {
 struct A {
     int gStuff[10];
 #if OVERRIDE_NEW
@@ -26,22 +27,26 @@ struct A {
     static GrMemoryPool gPool;
 };
 GrMemoryPool A::gPool(10 * (1 << 10), 10 * (1 << 10));
+}
+
 
 /**
  * This benchmark creates and deletes objects in stack order
  */
 class GrMemoryPoolBenchStack : public SkBenchmark {
+    enum {
+        N = SkBENCHLOOP(1 * (1 << 20)),
+    };
 public:
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+    GrMemoryPoolBenchStack(void* param) : INHERITED(param) {
+        fIsRendering = false;
     }
-
 protected:
     virtual const char* onGetName() {
         return "grmemorypool_stack";
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    virtual void onDraw(SkCanvas*) {
         SkRandom r;
         enum {
             kMaxObjects = 4 * (1 << 10),
@@ -51,11 +56,13 @@ protected:
         // We delete if a random [-1, 1] fixed pt is < the thresh. Otherwise,
         // we allocate. We start allocate-biased and ping-pong to delete-biased
         SkFixed delThresh = -SK_FixedHalf;
-        const int kSwitchThreshPeriod = loops / (2 * kMaxObjects);
+        enum {
+            kSwitchThreshPeriod = N / (2 * kMaxObjects),
+        };
         int s = 0;
 
         int count = 0;
-        for (int i = 0; i < loops; i++, ++s) {
+        for (int i = 0; i < N; i++, ++s) {
             if (kSwitchThreshPeriod == s) {
                 delThresh = -delThresh;
                 s = 0;
@@ -83,24 +90,26 @@ private:
  * This benchmark creates objects and deletes them in random order
  */
 class GrMemoryPoolBenchRandom : public SkBenchmark {
+    enum {
+        N = SkBENCHLOOP(1 * (1 << 20)),
+    };
 public:
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+    GrMemoryPoolBenchRandom(void* param) : INHERITED(param) {
+        fIsRendering = false;
     }
-
 protected:
     virtual const char* onGetName() {
         return "grmemorypool_random";
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    virtual void onDraw(SkCanvas*) {
         SkRandom r;
         enum {
             kMaxObjects = 4 * (1 << 10),
         };
         SkAutoTDelete<A> objects[kMaxObjects];
 
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < N; i++) {
             uint32_t idx = r.nextRangeU(0, kMaxObjects-1);
             if (NULL == objects[idx].get()) {
                 objects[idx].reset(new A);
@@ -119,22 +128,22 @@ private:
  */
 class GrMemoryPoolBenchQueue : public SkBenchmark {
     enum {
-        M = 4 * (1 << 10),
+        N = SkBENCHLOOP((1 << 8)),
+        M = SkBENCHLOOP(4 * (1 << 10)),
     };
 public:
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+    GrMemoryPoolBenchQueue(void* param) : INHERITED(param) {
+        fIsRendering = false;
     }
-
 protected:
     virtual const char* onGetName() {
         return "grmemorypool_queue";
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    virtual void onDraw(SkCanvas*) {
         SkRandom r;
         A* objects[M];
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < N; i++) {
             uint32_t count = r.nextRangeU(0, M-1);
             for (uint32_t i = 0; i < count; i++) {
                 objects[i] = new A;
@@ -151,8 +160,12 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new GrMemoryPoolBenchStack(); )
-DEF_BENCH( return new GrMemoryPoolBenchRandom(); )
-DEF_BENCH( return new GrMemoryPoolBenchQueue(); )
+static SkBenchmark* Fact1(void* p) { return new GrMemoryPoolBenchStack(p); }
+static SkBenchmark* Fact2(void* p) { return new GrMemoryPoolBenchRandom(p); }
+static SkBenchmark* Fact3(void* p) { return new GrMemoryPoolBenchQueue(p); }
+
+static BenchRegistry gReg01(Fact1);
+static BenchRegistry gReg02(Fact2);
+static BenchRegistry gReg03(Fact3);
 
 #endif

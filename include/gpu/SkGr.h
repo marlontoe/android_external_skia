@@ -25,6 +25,10 @@
 #include "SkRegion.h"
 #include "SkClipStack.h"
 
+#if (GR_DEBUG && defined(SK_RELEASE)) || (GR_RELEASE && defined(SK_DEBUG))
+//    #error "inconsistent GR_DEBUG and SK_DEBUG"
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 // Sk to Gr Type conversions
 
@@ -50,7 +54,6 @@ GR_STATIC_ASSERT((int)kIDA_GrBlendCoeff  == (int)SkXfermode::kIDA_Coeff);
  *  kUnknown_PixelConfig if the conversion cannot be done.
  */
 GrPixelConfig SkBitmapConfig2GrPixelConfig(SkBitmap::Config);
-bool GrPixelConfig2ColorType(GrPixelConfig, SkColorType*);
 
 static inline GrColor SkColor2GrColor(SkColor c) {
     SkPMColor pm = SkPreMultiplyColor(c);

@@ -14,6 +14,7 @@
 #include "SkStream.h"
 #include "SkStreamHelpers.h"
 #include "SkTDArray.h"
+#include "SkTRegistry.h"
 
 class SkBMPImageDecoder : public SkImageDecoder {
 public:
@@ -34,7 +35,7 @@ private:
 DEFINE_DECODER_CREATOR(BMPImageDecoder);
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool is_bmp(SkStreamRewindable* stream) {
+static bool is_bmp(SkStream* stream) {
     static const char kBmpMagic[] = { 'B', 'M' };
 
 
@@ -44,23 +45,23 @@ static bool is_bmp(SkStreamRewindable* stream) {
         !memcmp(buffer, kBmpMagic, sizeof(kBmpMagic));
 }
 
-static SkImageDecoder* sk_libbmp_dfactory(SkStreamRewindable* stream) {
+static SkImageDecoder* sk_libbmp_dfactory(SkStream* stream) {
     if (is_bmp(stream)) {
         return SkNEW(SkBMPImageDecoder);
     }
     return NULL;
 }
 
-static SkImageDecoder_DecodeReg gReg(sk_libbmp_dfactory);
+static SkTRegistry<SkImageDecoder*, SkStream*> gReg(sk_libbmp_dfactory);
 
-static SkImageDecoder::Format get_format_bmp(SkStreamRewindable* stream) {
+static SkImageDecoder::Format get_format_bmp(SkStream* stream) {
     if (is_bmp(stream)) {
         return SkImageDecoder::kBMP_Format;
     }
     return SkImageDecoder::kUnknown_Format;
 }
 
-static SkImageDecoder_FormatReg gFormatReg(get_format_bmp);
+static SkTRegistry<SkImageDecoder::Format, SkStream*> gFormatReg(get_format_bmp);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -133,8 +134,8 @@ bool SkBMPImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
 
     SkScaledBitmapSampler sampler(width, height, getSampleSize());
 
-    bm->setConfig(config, sampler.scaledWidth(), sampler.scaledHeight(), 0,
-                  kOpaque_SkAlphaType);
+    bm->setConfig(config, sampler.scaledWidth(), sampler.scaledHeight());
+    bm->setIsOpaque(true);
 
     if (justBounds) {
         return true;

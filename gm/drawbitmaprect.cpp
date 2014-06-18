@@ -6,11 +6,13 @@
  * found in the LICENSE file.
  */
 #include "gm.h"
-#include "SkBlurMask.h"
-#include "SkBlurMaskFilter.h"
-#include "SkColorPriv.h"
-#include "SkGradientShader.h"
 #include "SkShader.h"
+#include "SkColorPriv.h"
+#include "SkBlurMaskFilter.h"
+
+// effects
+#include "SkGradientShader.h"
+
 
 namespace skiagm {
 
@@ -163,12 +165,12 @@ protected:
             SkBitmap bm;
 
             bm = make_chessbm(5, 5);
-            paint.setFilterLevel(SkPaint::kLow_FilterLevel);
+            paint.setFilterBitmap(true);
 
             srcRect.setXYWH(1, 1, 3, 3);
             SkMaskFilter* mf = SkBlurMaskFilter::Create(
+                5,
                 SkBlurMaskFilter::kNormal_BlurStyle,
-                SkBlurMask::ConvertRadiusToSigma(SkIntToScalar(5)),
                 SkBlurMaskFilter::kHighQuality_BlurFlag |
                 SkBlurMaskFilter::kIgnoreTransform_BlurFlag);
             paint.setMaskFilter(mf)->unref();

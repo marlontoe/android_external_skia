@@ -7,12 +7,13 @@
 
 #include "LazyDecodeBitmap.h"
 
+#include "PictureRenderingFlags.h"  // --deferImageDecoding is defined here.
+#include "SkBitmap.h"
 #include "SkData.h"
-#include "SkDecodingImageGenerator.h"
-#include "SkDiscardableMemoryPool.h"
-#include "SkImageGenerator.h"
+#include "SkImageDecoder.h"
 #include "SkForceLinking.h"
-
+#include "SkLruImageCache.h"
+#include "SkPurgeableImageCache.h"
 #include "SkCommandLineFlags.h"
 
 __SK_FORCE_IMAGE_DECODER_LINKING;
@@ -21,28 +22,55 @@ DEFINE_bool(useVolatileCache, false, "Use a volatile cache for deferred image de
             "Only meaningful if --deferImageDecoding is set to true and the platform has an "
             "implementation.");
 
-//  Fits SkPicture::InstallPixelRefProc call signature.
-//  Used in SkPicturePlayback::CreateFromStream
-bool sk_tools::LazyDecodeBitmap(const void* src,
-                                size_t length,
-                                SkBitmap* dst) {
-    SkAutoDataUnref data(SkData::NewWithCopy(src, length));
-    if (NULL == data.get()) {
-        return false;
+SkLruImageCache gLruImageCache(1024 * 1024);
+
+namespace sk_tools {
+
+// Simple cache selector to choose between a purgeable cache for large images and the standard one
+// for smaller images.
+//
+class CacheSelector : public SkBitmapFactory::CacheSelector {
+
+public:
+    CacheSelector() {
+        fPurgeableImageCache = SkPurgeableImageCache::Create();
     }
 
-    SkAutoTDelete<SkImageGenerator> gen(SkNEW_ARGS(SkDecodingImageGenerator,
-                                                   (data)));
-    SkImageInfo info;
-    if (!gen->getInfo(&info)) {
-        return false;
+    ~CacheSelector() {
+        SkSafeUnref(fPurgeableImageCache);
     }
-    SkDiscardableMemory::Factory* pool = NULL;
-    if ((!FLAGS_useVolatileCache) || (info.fWidth * info.fHeight < 32 * 1024)) {
-        // how to do switching with SkDiscardableMemory.
-        pool = SkGetGlobalDiscardableMemoryPool();
-        // Only meaningful if platform has a default discardable
-        // memory implementation that differs from the global DM pool.
+
+    virtual SkImageCache* selectCache(const SkImage::Info& info) SK_OVERRIDE {
+        if (info.fWidth * info.fHeight > 32 * 1024 && fPurgeableImageCache != NULL) {
+            return fPurgeableImageCache;
+        }
+        return &gLruImageCache;
     }
-    return SkInstallDiscardablePixelRef(gen.detach(), dst, pool);
+private:
+    SkImageCache* fPurgeableImageCache;
+};
+
+static CacheSelector gCacheSelector;
+static SkBitmapFactory gFactory(&SkImageDecoder::DecodeMemoryToTarget);
+
+bool LazyDecodeBitmap(const void* buffer, size_t size, SkBitmap* bitmap) {
+    void* copiedBuffer = sk_malloc_throw(size);
+    memcpy(copiedBuffer, buffer, size);
+    SkAutoDataUnref data(SkData::NewFromMalloc(copiedBuffer, size));
+
+    static bool gOnce;
+    if (!gOnce) {
+        // Only use the cache selector if there is a purgeable image cache to use for large
+        // images.
+        if (FLAGS_useVolatileCache && SkAutoTUnref<SkImageCache>(
+                SkPurgeableImageCache::Create()).get() != NULL) {
+            gFactory.setCacheSelector(&gCacheSelector);
+        } else {
+            gFactory.setImageCache(&gLruImageCache);
+        }
+        gOnce = true;
+    }
+    return gFactory.installPixelRef(data, bitmap);
 }
+
+}  // namespace sk_tools

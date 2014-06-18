@@ -75,10 +75,11 @@ void SkDrawBitmap::dump(SkAnimateMaker* maker) {
     const char* formatName;
     switch (format) {
         case 0: formatName = "none"; break;
-        case 1: formatName = "A8"; break;
-        case 2: formatName = "Index8"; break;
-        case 3: formatName = "RGB16"; break;
-        case 4: formatName = "RGB32"; break;
+        case 1: formatName = "A1"; break;
+        case 2: formatName = "A8"; break;
+        case 3: formatName = "Index8"; break;
+        case 4: formatName = "RGB16"; break;
+        case 5: formatName = "RGB32"; break;
     }
     SkDebugf("format=\"%s\" />\n", formatName);
 }
@@ -188,7 +189,7 @@ void SkImageBaseBitmap::resolve() {
         fBitmap.reset();
 
         //SkStream* stream = SkStream::GetURIStream(fUriBase, src.c_str());
-        SkAutoTUnref<SkStreamAsset> stream(SkStream::NewFromFile(src.c_str()));
+        SkAutoTUnref<SkStream> stream(SkStream::NewFromFile(src.c_str()));
         if (stream.get()) {
             SkImageDecoder::DecodeStream(stream, &fBitmap);
         }

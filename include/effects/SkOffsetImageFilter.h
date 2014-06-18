@@ -12,11 +12,8 @@
 #include "SkPoint.h"
 
 class SK_API SkOffsetImageFilter : public SkImageFilter {
-    typedef SkImageFilter INHERITED;
-
 public:
-    SkOffsetImageFilter(SkScalar dx, SkScalar dy, SkImageFilter* input = NULL,
-                        const CropRect* cropRect = NULL);
+    SkOffsetImageFilter(SkScalar dx, SkScalar dy, SkImageFilter* input = NULL);
     SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkOffsetImageFilter)
 
 protected:
@@ -29,6 +26,8 @@ protected:
 
 private:
     SkVector fOffset;
+
+    typedef SkImageFilter INHERITED;
 };
 
 #endif

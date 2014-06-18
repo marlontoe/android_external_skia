@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkSize.h"
 
 static void TestISize(skiatest::Reporter* reporter) {
@@ -31,7 +30,7 @@ static void TestISize(skiatest::Reporter* reporter) {
                     a.fWidth == b.fWidth && a.fHeight == b.fHeight);
 }
 
-DEF_TEST(Size, reporter) {
+static void TestSize(skiatest::Reporter* reporter) {
     TestISize(reporter);
 
     SkSize a, b;
@@ -62,4 +61,7 @@ DEF_TEST(Size, reporter) {
     ia.set(ix, iy);
     a.set(x, y);
     REPORTER_ASSERT(reporter, a.toRound() == ia);
-}
+};
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Size", TestSizeClass, TestSize)

@@ -14,13 +14,9 @@
 
 class GrGpuGL;
 
-#ifdef SK_DEBUG
-  // Optionally compile the experimental GS code. Set to SK_DEBUG so that debug build bots will
-  // execute the code.
-  #define GR_GL_EXPERIMENTAL_GS 1
-#else
-  #define GR_GL_EXPERIMENTAL_GS 0
-#endif
+// optionally compile the experimental GS code. Set to GR_DEBUG so that debug build bots will
+// execute the code.
+#define GR_GL_EXPERIMENTAL_GS GR_DEBUG
 
 
 /** This class describes a program to generate. It also serves as a program cache key. Very little
@@ -34,7 +30,7 @@ public:
 
     // Returns this as a uint32_t array to be used as a key in the program cache.
     const uint32_t* asKey() const {
-        SkASSERT(fInitialized);
+        GrAssert(fInitialized);
         return reinterpret_cast<const uint32_t*>(fKey.get());
     }
 
@@ -47,7 +43,7 @@ public:
     uint32_t getChecksum() const { return *this->atOffset<uint32_t, kChecksumOffset>(); }
 
     // For unit testing.
-    void setRandom(SkRandom*,
+    void setRandom(SkMWCRandom*,
                    const GrGpuGL* gpu,
                    const GrRenderTarget* dummyDstRenderTarget,
                    const GrTexture* dummyDstCopyTexture,
@@ -75,12 +71,12 @@ public:
                       GrGLProgramDesc* outDesc);
 
     int numColorEffects() const {
-        SkASSERT(fInitialized);
+        GrAssert(fInitialized);
         return this->getHeader().fColorEffectCnt;
     }
 
     int numCoverageEffects() const {
-        SkASSERT(fInitialized);
+        GrAssert(fInitialized);
         return this->getHeader().fCoverageEffectCnt;
     }
 
@@ -89,7 +85,7 @@ public:
     GrGLProgramDesc& operator= (const GrGLProgramDesc& other);
 
     bool operator== (const GrGLProgramDesc& other) const {
-        SkASSERT(fInitialized && other.fInitialized);
+        GrAssert(fInitialized && other.fInitialized);
         // The length is masked as a hint to the compiler that the address will be 4 byte aligned.
         return 0 == memcmp(this->asKey(), other.asKey(), this->keyLength() & ~0x3);
     }
@@ -154,12 +150,12 @@ private:
         // should the FS discard if the coverage is zero (to avoid stencil manipulation)
         SkBool8                     fDiscardIfZeroCoverage;
 
-        ColorInput                  fColorInput : 8;
-        ColorInput                  fCoverageInput : 8;
-        CoverageOutput              fCoverageOutput : 8;
+        uint8_t                     fColorInput;            // casts to enum ColorInput
+        uint8_t                     fCoverageInput;         // casts to enum ColorInput
+        uint8_t                     fCoverageOutput;        // casts to enum CoverageOutput
 
-        SkBool8                     fHasVertexCode;
         SkBool8                     fEmitsPointSize;
+        uint8_t                     fColorFilterXfermode;   // casts to enum SkXfermode::Mode
 
         // To enable experimental geometry shader code (not for use in
         // production)
@@ -220,8 +216,6 @@ private:
     // code generation to GrGLShaderBuilder (and maybe add getters rather than friending).
     friend class GrGLProgram;
     friend class GrGLShaderBuilder;
-    friend class GrGLFullShaderBuilder;
-    friend class GrGLFragmentOnlyShaderBuilder;
 };
 
 #endif

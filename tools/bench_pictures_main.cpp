@@ -12,9 +12,12 @@
 #include "PictureRenderingFlags.h"
 #include "SkBenchLogger.h"
 #include "SkCommandLineFlags.h"
-#include "SkDiscardableMemoryPool.h"
 #include "SkGraphics.h"
 #include "SkImageDecoder.h"
+#if LAZY_CACHE_STATS
+    #include "SkLazyPixelRef.h"
+#endif
+#include "SkLruImageCache.h"
 #include "SkMath.h"
 #include "SkOSFile.h"
 #include "SkPicture.h"
@@ -140,6 +143,9 @@ static SkString filterFlagsUsage() {
     return result;
 }
 
+// Defined in LazyDecodeBitmap.cpp
+extern SkLruImageCache gLruImageCache;
+
 #if LAZY_CACHE_STATS
 static int32_t gTotalCacheHits;
 static int32_t gTotalCacheMisses;
@@ -157,12 +163,11 @@ static bool run_single_benchmark(const SkString& inputPath,
         return false;
     }
 
-    SkDiscardableMemoryPool* pool = SkGetGlobalDiscardableMemoryPool();
     // Since the old picture has been deleted, all pixels should be cleared.
-    SkASSERT(pool->getRAMUsed() == 0);
+    SkASSERT(gLruImageCache.getImageCacheUsed() == 0);
     if (FLAGS_countRAM) {
-        pool->setRAMBudget(SK_MaxU32);
-        // Set the limit to max, so all pixels will be kept
+        // Set the limit to zero, so all pixels will be kept
+      gLruImageCache.setImageCacheLimit(0);
     }
 
     SkPicture::InstallPixelRefProc proc;
@@ -192,9 +197,9 @@ static bool run_single_benchmark(const SkString& inputPath,
 
 #if LAZY_CACHE_STATS
     if (FLAGS_trackDeferredCaching) {
-        int32_t cacheHits = pool->fCacheHits;
-        int32_t cacheMisses = pool->fCacheMisses;
-        pool->fCacheHits = pool->fCacheMisses = 0;
+        int32_t cacheHits = SkLazyPixelRef::GetCacheHits();
+        int32_t cacheMisses = SkLazyPixelRef::GetCacheMisses();
+        SkLazyPixelRef::ResetCacheStats();
         SkString hitString;
         hitString.printf("Cache hit rate: %f\n", (double) cacheHits / (cacheHits + cacheMisses));
         gLogger.logProgress(hitString);
@@ -204,7 +209,7 @@ static bool run_single_benchmark(const SkString& inputPath,
 #endif
     if (FLAGS_countRAM) {
         SkString ramCount("RAM used for bitmaps: ");
-        size_t bytes = pool->getRAMUsed();
+        size_t bytes = gLruImageCache.getImageCacheUsed();
         if (bytes > 1024) {
             size_t kb = bytes / 1024;
             if (kb > 1024) {

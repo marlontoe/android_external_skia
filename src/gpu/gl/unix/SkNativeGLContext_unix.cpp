@@ -285,7 +285,3 @@ void SkNativeGLContext::makeCurrent() const {
         SkDebugf("Could not set the context.\n");
     }
 }
-
-void SkNativeGLContext::swapBuffers() const {
-    glXSwapBuffers(fDisplay, fGlxPixmap);
-}

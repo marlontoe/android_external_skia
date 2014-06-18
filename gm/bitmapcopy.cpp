@@ -11,6 +11,7 @@ namespace skiagm {
 
 static const char* gConfigNames[] = {
     "unknown config",
+    "A1",
     "A8",
     "Index8",
     "565",
@@ -65,7 +66,7 @@ protected:
         SkScalar horizMargin(SkIntToScalar(10));
         SkScalar vertMargin(SkIntToScalar(10));
 
-        SkBitmapDevice devTmp(SkBitmap::kARGB_8888_Config, 40, 40, false);
+        SkDevice devTmp(SkBitmap::kARGB_8888_Config, 40, 40);
         SkCanvas canvasTmp(&devTmp);
 
         draw_checks(&canvasTmp, 40, 40);

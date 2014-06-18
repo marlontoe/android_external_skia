@@ -10,12 +10,10 @@
 #define SkFlattenableBuffers_DEFINED
 
 #include "SkColor.h"
-#include "SkData.h"
 #include "SkPaint.h"
 #include "SkPoint.h"
 
 class SkBitmap;
-class SkDrawLooper;
 class SkFlattenable;
 struct SkIRect;
 class SkMatrix;
@@ -24,11 +22,11 @@ class SkOrderedWriteBuffer;
 class SkPath;
 class SkPixelRef;
 struct SkRect;
+class SkRefCnt;
 class SkRegion;
 class SkStream;
 class SkString;
 class SkTypeface;
-class SkUnitMapper;
 class SkWStream;
 
 class SkFlattenableReadBuffer {
@@ -43,20 +41,14 @@ public:
         kCrossProcess_Flag      = 1 << 0,
         kScalarIsFloat_Flag     = 1 << 1,
         kPtrIs64Bit_Flag        = 1 << 2,
-        /** The kValidation_Flag is used to force stream validations (by making
-         * sure that no operation reads past the end of the stream, for example)
-         * and error handling if any reading operation yields an invalid value.
-         */
-        kValidation_Flag        = 1 << 3,
     };
 
     void setFlags(uint32_t flags) { fFlags = flags; }
     uint32_t getFlags() const { return fFlags; }
 
-    bool isCrossProcess() const { return SkToBool(fFlags & (kCrossProcess_Flag | kValidation_Flag)); }
+    bool isCrossProcess() const { return SkToBool(fFlags & kCrossProcess_Flag); }
     bool isScalarFloat() const { return SkToBool(fFlags & kScalarIsFloat_Flag); }
     bool isPtr64Bit() const { return SkToBool(fFlags & kPtrIs64Bit_Flag); }
-    bool isValidating() const { return SkToBool(fFlags & kValidation_Flag); }
 
     // primitives
     virtual bool readBool() = 0;
@@ -71,26 +63,8 @@ public:
     virtual void readString(SkString* string) = 0;
     virtual void* readEncodedString(size_t* length, SkPaint::TextEncoding encoding) = 0;
 
-    /**
-      @param type   This parameter is only used when using SkValidatingReadBuffer. It will verify
-                    that the object about to be deserialized is of the given type or early return
-                    NULL otherwise. The type provided here is the type of the base class of the
-                    object to deserialize.
-      */
-    virtual SkFlattenable* readFlattenable(SkFlattenable::Type type) = 0;
-
-    SkColorFilter* readColorFilter();
-    SkDrawLooper* readDrawLooper();
-    SkImageFilter* readImageFilter();
-    SkMaskFilter* readMaskFilter();
-    SkPathEffect* readPathEffect();
-    SkPixelRef* readPixelRef();
-    SkRasterizer* readRasterizer();
-    SkShader* readShader();
-    SkUnitMapper* readUnitMapper();
-    SkXfermode* readXfermode();
-
     // common data structures
+    virtual SkFlattenable* readFlattenable() = 0;
     virtual void readPoint(SkPoint* point) = 0;
     virtual void readMatrix(SkMatrix* matrix) = 0;
     virtual void readIRect(SkIRect* rect) = 0;
@@ -99,24 +73,11 @@ public:
     virtual void readPath(SkPath* path) = 0;
 
     // binary data and arrays
-
-    /**
-      * In the following read.*Array(...) functions, the size parameter specifies the allocation
-      * size in number of elements (or in bytes, for void*) of the pointer parameter. If the
-      * pointer parameter's size does not match the size to be read, the pointer parameter's memory
-      * will then stay uninitialized, the cursor will be moved to the end of the stream and, in the
-      * case where isValidating() is true, an error flag will be set internally (see
-      * SkValidatingReadBuffer).
-      * If the sizes match, then "size" amount of memory will be read.
-      *
-      * @param size amount of memory expected to be read
-      * @return true if the size parameter matches the size to be read, false otherwise
-      */
-    virtual bool readByteArray(void* value, size_t size) = 0;
-    virtual bool readColorArray(SkColor* colors, size_t size) = 0;
-    virtual bool readIntArray(int32_t* values, size_t size) = 0;
-    virtual bool readPointArray(SkPoint* points, size_t size) = 0;
-    virtual bool readScalarArray(SkScalar* values, size_t size) = 0;
+    virtual uint32_t readByteArray(void* value) = 0;
+    virtual uint32_t readColorArray(SkColor* colors) = 0;
+    virtual uint32_t readIntArray(int32_t* values) = 0;
+    virtual uint32_t readPointArray(SkPoint* points) = 0;
+    virtual uint32_t readScalarArray(SkScalar* values) = 0;
 
     /** This helper peeks into the buffer and reports back the length of the next array in
      *  the buffer but does not change the state of the buffer.
@@ -137,31 +98,11 @@ public:
         return point;
     }
 
-    SkData* readByteArrayAsData() {
-        size_t len = this->getArrayCount();
-        void* buffer = sk_malloc_throw(len);
-        (void)this->readByteArray(buffer, len);
-        return SkData::NewFromMalloc(buffer, len);
+    template <typename T> T* readFlattenableT() {
+        return static_cast<T*>(this->readFlattenable());
     }
 
-    /** This function validates that the isValid input parameter is true
-      * If isValidating() is false, then true is always returned
-      * If isValidating() is true, then true is returned until validate() is called with isValid
-      * set to false. When isValid is false, an error flag will be set internally and, from that
-      * point on, validate() will return false. The error flag cannot be unset.
-      *
-      * @param isValid result of a test that is expected to be true
-      */
-    virtual bool validate(bool isValid);
-
-    /** This function returns true by default
-      * If isValidating() is true, it will return false if the internal error flag is set.
-      * Otherwise, it will return true.
-      */
-    virtual bool isValid() const { return true; }
-
 private:
-    template <typename T> T* readFlattenableT();
     uint32_t fFlags;
 };
 
@@ -190,7 +131,7 @@ public:
                                     SkPaint::TextEncoding encoding) = 0;
 
     // common data structures
-    virtual void writeFlattenable(const SkFlattenable* flattenable) = 0;
+    virtual void writeFlattenable(SkFlattenable* flattenable) = 0;
     virtual void writeColor(const SkColor& color) = 0;
     virtual void writeColorArray(const SkColor* color, uint32_t count) = 0;
     virtual void writePoint(const SkPoint& point) = 0;
@@ -213,33 +154,20 @@ public:
 
     enum Flags {
         kCrossProcess_Flag               = 0x01,
-        /** The kValidation_Flag is used here to make sure the write operation
-         *  is symmetric with the read operation using the equivalent flag
-         *  SkFlattenableReadBuffer::kValidation_Flag.
-         */
-        kValidation_Flag                 = 0x02,
     };
 
     uint32_t getFlags() const { return fFlags; }
     void setFlags(uint32_t flags) { fFlags = flags; }
 
     bool isCrossProcess() const {
-        return SkToBool(fFlags & (kCrossProcess_Flag | kValidation_Flag));
-    }
-
-    bool isValidating() const {
-        return SkToBool(fFlags & kValidation_Flag);
+        return SkToBool(fFlags & kCrossProcess_Flag);
     }
 
     bool persistTypeface() const { return (fFlags & kCrossProcess_Flag) != 0; }
 
-    void writeDataAsByteArray(SkData* data) {
-        this->writeByteArray(data->data(), data->size());
-    }
-
 protected:
     // A helper function so that each subclass does not have to be a friend of SkFlattenable
-    void flattenObject(const SkFlattenable* obj, SkFlattenableWriteBuffer& buffer);
+    void flattenObject(SkFlattenable* obj, SkFlattenableWriteBuffer& buffer);
 
     uint32_t fFlags;
 };

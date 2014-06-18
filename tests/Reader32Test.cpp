@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
@@ -5,9 +6,10 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-#include "TestClassDef.h"
+
+
 #include "SkReader32.h"
+#include "Test.h"
 
 static void assert_eof(skiatest::Reporter* reporter, const SkReader32& reader) {
     REPORTER_ASSERT(reporter, reader.eof());
@@ -33,7 +35,7 @@ static void assert_empty(skiatest::Reporter* reporter, const SkReader32& reader)
     assert_start(reporter, reader);
 }
 
-DEF_TEST(Reader32, reporter) {
+static void Tests(skiatest::Reporter* reporter) {
     SkReader32 reader;
     assert_empty(reporter, reader);
     REPORTER_ASSERT(reporter, NULL == reader.base());
@@ -80,3 +82,6 @@ DEF_TEST(Reader32, reporter) {
     REPORTER_ASSERT(reporter, NULL == reader.base());
     REPORTER_ASSERT(reporter, NULL == reader.peek());
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Reader32", Reader32Class, Tests)

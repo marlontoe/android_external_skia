@@ -106,8 +106,6 @@ public:
                           const SkStrokeRec&, const SkMatrix&,
                           const SkRect* cullR) const;
 
-    SK_DEFINE_FLATTENABLE_TYPE(SkPathEffect)
-
 protected:
     SkPathEffect(SkFlattenableReadBuffer& buffer) : INHERITED(buffer) {}
 

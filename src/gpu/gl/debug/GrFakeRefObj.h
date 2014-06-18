@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2012 Google Inc.
  *
@@ -8,8 +9,8 @@
 #ifndef GrFakeRefObj_DEFINED
 #define GrFakeRefObj_DEFINED
 
-#include "SkTypes.h"
 #include "gl/GrGLInterface.h"
+#include "GrNoncopyable.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // This object is used to track the OpenGL objects. We don't use real
@@ -18,7 +19,7 @@
 // are tracking in this class are actually OpenGL's references to the objects
 // not "ours"
 // Each object also gets a unique globally identifying ID
-class GrFakeRefObj : public SkNoncopyable {
+class GrFakeRefObj : public GrNoncopyable {
 public:
     GrFakeRefObj()
         : fRef(0)

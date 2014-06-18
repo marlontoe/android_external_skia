@@ -8,16 +8,12 @@
 
 
 #include "SkXfermode.h"
-#include "SkXfermode_proccoeff.h"
 #include "SkColorPriv.h"
 #include "SkFlattenableBuffers.h"
 #include "SkMathPriv.h"
 #include "SkString.h"
-#include "SkUtilsArm.h"
 
-#if !SK_ARM_NEON_IS_NONE
-#include "SkXfermode_opts_arm_neon.h"
-#endif
+SK_DEFINE_INST_COUNT(SkXfermode)
 
 #define SkAlphaMulAlpha(a, b)   SkMulDiv255Round(a, b)
 
@@ -63,6 +59,13 @@ static inline int clamp_div255round(int prod) {
     } else {
         return SkDiv255Round(prod);
     }
+}
+
+static inline int clamp_max(int value, int max) {
+    if (value > max) {
+        value = max;
+    }
+    return value;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -468,18 +471,16 @@ static inline void clipColor(int* r, int* g, int* b, int a) {
     int L = Lum(*r, *g, *b);
     int n = minimum(*r, *g, *b);
     int x = maximum(*r, *g, *b);
-    int denom;
-    if ((n < 0) && (denom = L - n)) { // Compute denom and make sure it's non zero
-       *r = L + SkMulDiv(*r - L, L, denom);
-       *g = L + SkMulDiv(*g - L, L, denom);
-       *b = L + SkMulDiv(*b - L, L, denom);
+    if(n < 0) {
+       *r = L + SkMulDiv(*r - L, L, L - n);
+       *g = L + SkMulDiv(*g - L, L, L - n);
+       *b = L + SkMulDiv(*b - L, L, L - n);
     }
 
-    if ((x > a) && (denom = x - L)) { // Compute denom and make sure it's non zero
-       int numer = a - L;
-       *r = L + SkMulDiv(*r - L, numer, denom);
-       *g = L + SkMulDiv(*g - L, numer, denom);
-       *b = L + SkMulDiv(*b - L, numer, denom);
+    if (x > a) {
+       *r = L + SkMulDiv(*r - L, a - L, x - L);
+       *g = L + SkMulDiv(*g - L, a - L, x - L);
+       *b = L + SkMulDiv(*b - L, a - L, x - L);
     }
 }
 
@@ -630,7 +631,16 @@ static SkPMColor luminosity_modeproc(SkPMColor src, SkPMColor dst) {
     return SkPackARGB32(a, r, g, b);
 }
 
-const ProcCoeff gProcCoeffs[] = {
+
+struct ProcCoeff {
+    SkXfermodeProc      fProc;
+    SkXfermode::Coeff   fSC;
+    SkXfermode::Coeff   fDC;
+};
+
+#define CANNOT_USE_COEFF    SkXfermode::Coeff(-1)
+
+static const ProcCoeff gProcCoeffs[] = {
     { clear_modeproc,   SkXfermode::kZero_Coeff,    SkXfermode::kZero_Coeff },
     { src_modeproc,     SkXfermode::kOne_Coeff,     SkXfermode::kZero_Coeff },
     { dst_modeproc,     SkXfermode::kZero_Coeff,    SkXfermode::kOne_Coeff },
@@ -673,21 +683,20 @@ bool SkXfermode::asMode(Mode* mode) const {
     return false;
 }
 
-bool SkXfermode::asNewEffect(GrEffectRef** effect, GrTexture* background) const {
-    return false;
+bool SkXfermode::asNewEffectOrCoeff(GrContext*, GrEffectRef**, Coeff* src, Coeff* dst, GrTexture*) const {
+    return this->asCoeff(src, dst);
 }
 
 bool SkXfermode::AsNewEffectOrCoeff(SkXfermode* xfermode,
+                                    GrContext* context,
                                     GrEffectRef** effect,
                                     Coeff* src,
                                     Coeff* dst,
                                     GrTexture* background) {
     if (NULL == xfermode) {
         return ModeAsCoeff(kSrcOver_Mode, src, dst);
-    } else if (xfermode->asCoeff(src, dst)) {
-        return true;
     } else {
-        return xfermode->asNewEffect(effect, background);
+        return xfermode->asNewEffectOrCoeff(context, effect, src, dst, background);
     }
 }
 
@@ -886,10 +895,10 @@ void SkProcXfermode::toString(SkString* str) const {
 #if SK_SUPPORT_GPU
 
 #include "GrEffect.h"
-#include "GrCoordTransform.h"
 #include "GrEffectUnitTest.h"
 #include "GrTBackendEffectFactory.h"
 #include "gl/GrGLEffect.h"
+#include "gl/GrGLEffectMatrix.h"
 
 /**
  * GrEffect that implements the all the separable xfer modes that cannot be expressed as Coeffs.
@@ -926,31 +935,36 @@ public:
     class GLEffect : public GrGLEffect {
     public:
         GLEffect(const GrBackendEffectFactory& factory, const GrDrawEffect&)
-            : GrGLEffect(factory) {
+            : GrGLEffect(factory )
+            , fBackgroundEffectMatrix(kCoordsType) {
         }
         virtual void emitCode(GrGLShaderBuilder* builder,
                               const GrDrawEffect& drawEffect,
                               EffectKey key,
                               const char* outputColor,
                               const char* inputColor,
-                              const TransformedCoordsArray& coords,
                               const TextureSamplerArray& samplers) SK_OVERRIDE {
             SkXfermode::Mode mode = drawEffect.castEffect<XferEffect>().mode();
             const GrTexture* backgroundTex = drawEffect.castEffect<XferEffect>().backgroundAccess().getTexture();
             const char* dstColor;
             if (backgroundTex) {
+                const char* bgCoords;
+                GrSLType bgCoordsType = fBackgroundEffectMatrix.emitCode(builder, key, &bgCoords, NULL, "BG");
                 dstColor = "bgColor";
                 builder->fsCodeAppendf("\t\tvec4 %s = ", dstColor);
-                builder->fsAppendTextureLookup(samplers[0], coords[0].c_str(), coords[0].type());
+                builder->appendTextureLookup(GrGLShaderBuilder::kFragment_ShaderType,
+                                             samplers[0],
+                                             bgCoords,
+                                             bgCoordsType);
                 builder->fsCodeAppendf(";\n");
             } else {
                 dstColor = builder->dstColor();
             }
-            SkASSERT(NULL != dstColor);
+            GrAssert(NULL != dstColor);
 
             // We don't try to optimize for this case at all
             if (NULL == inputColor) {
-                builder->fsCodeAppendf("\t\tconst vec4 ones = vec4(1);\n");
+                builder->fsCodeAppendf("\t\tconst vec4 ones = %s;\n", GrGLSLOnesVecf(4));
                 inputColor = "ones";
             }
             builder->fsCodeAppendf("\t\t// SkXfermode::Mode: %s\n", SkXfermode::ModeName(mode));
@@ -1077,7 +1091,28 @@ public:
         }
 
         static inline EffectKey GenKey(const GrDrawEffect& drawEffect, const GrGLCaps&) {
-            return drawEffect.castEffect<XferEffect>().mode();
+            const XferEffect& xfer = drawEffect.castEffect<XferEffect>();
+            GrTexture* bgTex = xfer.backgroundAccess().getTexture();
+            EffectKey bgKey = 0;
+            if (bgTex) {
+                bgKey = GrGLEffectMatrix::GenKey(GrEffect::MakeDivByTextureWHMatrix(bgTex),
+                                                 drawEffect,
+                                                 GLEffect::kCoordsType,
+                                                 bgTex);
+            }
+            EffectKey modeKey = xfer.mode() << GrGLEffectMatrix::kKeyBits;
+            return modeKey | bgKey;
+        }
+
+        virtual void setData(const GrGLUniformManager& uman, const GrDrawEffect& drawEffect) SK_OVERRIDE {
+            const XferEffect& xfer = drawEffect.castEffect<XferEffect>();
+            GrTexture* bgTex = xfer.backgroundAccess().getTexture();
+            if (bgTex) {
+                fBackgroundEffectMatrix.setData(uman,
+                                                GrEffect::MakeDivByTextureWHMatrix(bgTex),
+                                                drawEffect,
+                                                bgTex);
+            }
         }
 
     private:
@@ -1190,11 +1225,12 @@ public:
                 GrGLShaderVar("color", kVec3f_GrSLType),
             };
             SkString getLumBody("\treturn dot(vec3(0.3, 0.59, 0.11), color);\n");
-            builder->fsEmitFunction(kFloat_GrSLType,
-                                    "luminance",
-                                    SK_ARRAY_COUNT(getLumArgs), getLumArgs,
-                                    getLumBody.c_str(),
-                                    &getFunction);
+            builder->emitFunction(GrGLShaderBuilder::kFragment_ShaderType,
+                                  kFloat_GrSLType,
+                                  "luminance",
+                                   SK_ARRAY_COUNT(getLumArgs), getLumArgs,
+                                   getLumBody.c_str(),
+                                   &getFunction);
 
             // Emit the set luminance function.
             GrGLShaderVar setLumArgs[] = {
@@ -1215,11 +1251,12 @@ public:
                               "\t\toutColor = outLum + ((outColor - vec3(outLum, outLum, outLum)) * (alpha - outLum)) / (maxComp - outLum);\n"
                               "\t}\n"
                               "\treturn outColor;\n");
-            builder->fsEmitFunction(kVec3f_GrSLType,
-                                    "set_luminance",
-                                    SK_ARRAY_COUNT(setLumArgs), setLumArgs,
-                                    setLumBody.c_str(),
-                                    setLumFunction);
+            builder->emitFunction(GrGLShaderBuilder::kFragment_ShaderType,
+                        kVec3f_GrSLType,
+                        "set_luminance",
+                        SK_ARRAY_COUNT(setLumArgs), setLumArgs,
+                        setLumBody.c_str(),
+                        setLumFunction);
         }
 
         // Adds a function that creates a color with the hue and luminosity of one input color and
@@ -1232,11 +1269,12 @@ public:
             SkString getSatBody;
             getSatBody.printf("\treturn max(max(color.r, color.g), color.b) - "
                               "min(min(color.r, color.g), color.b);\n");
-            builder->fsEmitFunction(kFloat_GrSLType,
-                                    "saturation",
-                                    SK_ARRAY_COUNT(getSatArgs), getSatArgs,
-                                    getSatBody.c_str(),
-                                    &getFunction);
+            builder->emitFunction(GrGLShaderBuilder::kFragment_ShaderType,
+                                  kFloat_GrSLType,
+                                  "saturation",
+                                  SK_ARRAY_COUNT(getSatArgs), getSatArgs,
+                                  getSatBody.c_str(),
+                                  &getFunction);
 
             // Emit a helper that sets the saturation given sorted input channels. This used
             // to use inout params for min, mid, and max components but that seems to cause
@@ -1258,11 +1296,12 @@ public:
                                               "\t} else {\n"
                                               "\t\treturn vec3(0, 0, 0);\n"
                                               "\t}\n";
-            builder->fsEmitFunction(kVec3f_GrSLType,
-                                    "set_saturation_helper",
-                                    SK_ARRAY_COUNT(helperArgs), helperArgs,
-                                    kHelperBody,
-                                    &helperFunction);
+            builder->emitFunction(GrGLShaderBuilder::kFragment_ShaderType,
+                                  kVec3f_GrSLType,
+                                  "set_saturation_helper",
+                                  SK_ARRAY_COUNT(helperArgs), helperArgs,
+                                  kHelperBody,
+                                  &helperFunction);
 
             GrGLShaderVar setSatArgs[] = {
                 GrGLShaderVar("hueLumColor", kVec3f_GrSLType),
@@ -1289,14 +1328,17 @@ public:
                                "\treturn hueLumColor;\n",
                                getFunction.c_str(), helpFunc, helpFunc, helpFunc, helpFunc,
                                helpFunc, helpFunc);
-            builder->fsEmitFunction(kVec3f_GrSLType,
-                                    "set_saturation",
-                                    SK_ARRAY_COUNT(setSatArgs), setSatArgs,
-                                    setSatBody.c_str(),
-                                    setSatFunction);
+            builder->emitFunction(GrGLShaderBuilder::kFragment_ShaderType,
+                                  kVec3f_GrSLType,
+                                  "set_saturation",
+                                  SK_ARRAY_COUNT(setSatArgs), setSatArgs,
+                                  setSatBody.c_str(),
+                                  setSatFunction);
 
         }
 
+        static const GrEffect::CoordsType kCoordsType = GrEffect::kLocal_CoordsType;
+        GrGLEffectMatrix   fBackgroundEffectMatrix;
         typedef GrGLEffect INHERITED;
     };
 
@@ -1306,8 +1348,6 @@ private:
     XferEffect(SkXfermode::Mode mode, GrTexture* background)
         : fMode(mode) {
         if (background) {
-            fBackgroundTransform.reset(kLocal_GrCoordSet, background);
-            this->addCoordTransform(&fBackgroundTransform);
             fBackgroundAccess.reset(background);
             this->addTextureAccess(&fBackgroundAccess);
         } else {
@@ -1321,20 +1361,19 @@ private:
     }
 
     SkXfermode::Mode fMode;
-    GrCoordTransform fBackgroundTransform;
     GrTextureAccess  fBackgroundAccess;
 
     typedef GrEffect INHERITED;
 };
 
 GR_DEFINE_EFFECT_TEST(XferEffect);
-GrEffectRef* XferEffect::TestCreate(SkRandom* rand,
+GrEffectRef* XferEffect::TestCreate(SkMWCRandom* rand,
                                     GrContext*,
                                     const GrDrawTargetCaps&,
                                     GrTexture*[]) {
     int mode = rand->nextRangeU(SkXfermode::kLastCoeffMode + 1, SkXfermode::kLastSeparableMode);
 
-    AutoEffectUnref gEffect(SkNEW_ARGS(XferEffect, (static_cast<SkXfermode::Mode>(mode), NULL)));
+    static AutoEffectUnref gEffect(SkNEW_ARGS(XferEffect, (static_cast<SkXfermode::Mode>(mode), NULL)));
     return CreateEffectRef(gEffect);
 }
 
@@ -1343,61 +1382,83 @@ GrEffectRef* XferEffect::TestCreate(SkRandom* rand,
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-SkProcCoeffXfermode::SkProcCoeffXfermode(SkFlattenableReadBuffer& buffer) : INHERITED(buffer) {
-    uint32_t mode32 = buffer.read32() % SK_ARRAY_COUNT(gProcCoeffs);
-    if (mode32 >= SK_ARRAY_COUNT(gProcCoeffs)) {
-        // out of range, just set to something harmless
-        mode32 = SkXfermode::kSrcOut_Mode;
-    }
-    fMode = (SkXfermode::Mode)mode32;
-
-    const ProcCoeff& rec = gProcCoeffs[fMode];
-    // these may be valid, or may be CANNOT_USE_COEFF
-    fSrcCoeff = rec.fSC;
-    fDstCoeff = rec.fDC;
-    // now update our function-ptr in the super class
-    this->INHERITED::setProc(rec.fProc);
-}
-
-bool SkProcCoeffXfermode::asMode(Mode* mode) const {
-    if (mode) {
-        *mode = fMode;
-    }
-    return true;
-}
-
-bool SkProcCoeffXfermode::asCoeff(Coeff* sc, Coeff* dc) const {
-    if (CANNOT_USE_COEFF == fSrcCoeff) {
-        return false;
+class SkProcCoeffXfermode : public SkProcXfermode {
+public:
+    SkProcCoeffXfermode(const ProcCoeff& rec, Mode mode)
+            : INHERITED(rec.fProc) {
+        fMode = mode;
+        // these may be valid, or may be CANNOT_USE_COEFF
+        fSrcCoeff = rec.fSC;
+        fDstCoeff = rec.fDC;
     }
 
-    if (sc) {
-        *sc = fSrcCoeff;
-    }
-    if (dc) {
-        *dc = fDstCoeff;
-    }
-    return true;
-}
-
-#if SK_SUPPORT_GPU
-bool SkProcCoeffXfermode::asNewEffect(GrEffectRef** effect,
-                                      GrTexture* background) const {
-    if (XferEffect::IsSupportedMode(fMode)) {
-        if (NULL != effect) {
-            *effect = XferEffect::Create(fMode, background);
-            SkASSERT(NULL != *effect);
+    virtual bool asMode(Mode* mode) const SK_OVERRIDE {
+        if (mode) {
+            *mode = fMode;
         }
         return true;
     }
-    return false;
-}
+
+    virtual bool asCoeff(Coeff* sc, Coeff* dc) const SK_OVERRIDE {
+        if (CANNOT_USE_COEFF == fSrcCoeff) {
+            return false;
+        }
+
+        if (sc) {
+            *sc = fSrcCoeff;
+        }
+        if (dc) {
+            *dc = fDstCoeff;
+        }
+        return true;
+    }
+
+#if SK_SUPPORT_GPU
+    virtual bool asNewEffectOrCoeff(GrContext*,
+                                    GrEffectRef** effect,
+                                    Coeff* src,
+                                    Coeff* dst,
+                                    GrTexture* background) const SK_OVERRIDE {
+        if (this->asCoeff(src, dst)) {
+            return true;
+        }
+        if (XferEffect::IsSupportedMode(fMode)) {
+            if (NULL != effect) {
+                *effect = XferEffect::Create(fMode, background);
+                SkASSERT(NULL != *effect);
+            }
+            return true;
+        }
+        return false;
+    }
 #endif
 
-void SkProcCoeffXfermode::flatten(SkFlattenableWriteBuffer& buffer) const {
-    this->INHERITED::flatten(buffer);
-    buffer.write32(fMode);
-}
+    SK_DEVELOPER_TO_STRING()
+    SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkProcCoeffXfermode)
+
+protected:
+    SkProcCoeffXfermode(SkFlattenableReadBuffer& buffer) : INHERITED(buffer) {
+        fMode = (SkXfermode::Mode)buffer.read32();
+
+        const ProcCoeff& rec = gProcCoeffs[fMode];
+        // these may be valid, or may be CANNOT_USE_COEFF
+        fSrcCoeff = rec.fSC;
+        fDstCoeff = rec.fDC;
+        // now update our function-ptr in the super class
+        this->INHERITED::setProc(rec.fProc);
+    }
+
+    virtual void flatten(SkFlattenableWriteBuffer& buffer) const SK_OVERRIDE {
+        this->INHERITED::flatten(buffer);
+        buffer.write32(fMode);
+    }
+
+private:
+    Mode    fMode;
+    Coeff   fSrcCoeff, fDstCoeff;
+
+    typedef SkProcXfermode INHERITED;
+};
 
 const char* SkXfermode::ModeName(Mode mode) {
     SkASSERT((unsigned) mode <= (unsigned)kLastMode);
@@ -1657,83 +1718,26 @@ void SkDstOutXfermode::toString(SkString* str) const {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-SK_DECLARE_STATIC_MUTEX(gCachedXfermodesMutex);
-static SkXfermode* gCachedXfermodes[SkXfermode::kLastMode + 1];
-
-void SkXfermode::Term() {
-    SkAutoMutexAcquire ac(gCachedXfermodesMutex);
-
-    for (size_t i = 0; i < SK_ARRAY_COUNT(gCachedXfermodes); ++i) {
-        SkSafeUnref(gCachedXfermodes[i]);
-        gCachedXfermodes[i] = NULL;
-    }
-}
-
-extern SkProcCoeffXfermode* SkPlatformXfermodeFactory(const ProcCoeff& rec,
-                                                      SkXfermode::Mode mode);
-extern SkXfermodeProc SkPlatformXfermodeProcFactory(SkXfermode::Mode mode);
-
 SkXfermode* SkXfermode::Create(Mode mode) {
     SkASSERT(SK_ARRAY_COUNT(gProcCoeffs) == kModeCount);
-    SkASSERT(SK_ARRAY_COUNT(gCachedXfermodes) == kModeCount);
+    SkASSERT((unsigned)mode < kModeCount);
 
-    if ((unsigned)mode >= kModeCount) {
-        // report error
-        return NULL;
+    const ProcCoeff& rec = gProcCoeffs[mode];
+
+    switch (mode) {
+        case kClear_Mode:
+            return SkNEW_ARGS(SkClearXfermode, (rec));
+        case kSrc_Mode:
+            return SkNEW_ARGS(SkSrcXfermode, (rec));
+        case kSrcOver_Mode:
+            return NULL;
+        case kDstIn_Mode:
+            return SkNEW_ARGS(SkDstInXfermode, (rec));
+        case kDstOut_Mode:
+            return SkNEW_ARGS(SkDstOutXfermode, (rec));
+        default:
+            return SkNEW_ARGS(SkProcCoeffXfermode, (rec, mode));
     }
-
-    // Skia's "defaut" mode is srcover. NULL in SkPaint is interpreted as srcover
-    // so we can just return NULL from the factory.
-    if (kSrcOver_Mode == mode) {
-        return NULL;
-    }
-
-    // guard our access to gCachedXfermodes, since we may write into it
-    SkAutoMutexAcquire ac(gCachedXfermodesMutex);
-
-    SkXfermode* xfer = gCachedXfermodes[mode];
-    if (NULL == xfer) {
-        ProcCoeff rec = gProcCoeffs[mode];
-
-        SkXfermodeProc pp = SkPlatformXfermodeProcFactory(mode);
-
-        if (pp != NULL) {
-            rec.fProc = pp;
-        }
-
-        // check if we have a platform optim for that
-        SkProcCoeffXfermode* xfm = SkPlatformXfermodeFactory(rec, mode);
-        if (xfm != NULL) {
-            xfer = xfm;
-        } else {
-            // All modes can in theory be represented by the ProcCoeff rec, since
-            // it contains function ptrs. However, a few modes are both simple and
-            // commonly used, so we call those out for their own subclasses here.
-            switch (mode) {
-                case kClear_Mode:
-                    xfer = SkNEW_ARGS(SkClearXfermode, (rec));
-                    break;
-                case kSrc_Mode:
-                    xfer = SkNEW_ARGS(SkSrcXfermode, (rec));
-                    break;
-                case kSrcOver_Mode:
-                    SkASSERT(false);    // should not land here
-                    break;
-                case kDstIn_Mode:
-                    xfer = SkNEW_ARGS(SkDstInXfermode, (rec));
-                    break;
-                case kDstOut_Mode:
-                    xfer = SkNEW_ARGS(SkDstOutXfermode, (rec));
-                    break;
-                default:
-                    // no special-case, just rely in the rec and its function-ptrs
-                    xfer = SkNEW_ARGS(SkProcCoeffXfermode, (rec, mode));
-                    break;
-            }
-        }
-        gCachedXfermodes[mode] = xfer;
-    }
-    return SkSafeRef(xfer);
 }
 
 SkXfermodeProc SkXfermode::GetProc(Mode mode) {
@@ -1973,7 +1977,4 @@ SK_DEFINE_FLATTENABLE_REGISTRAR_GROUP_START(SkXfermode)
     SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkSrcXfermode)
     SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkDstInXfermode)
     SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkDstOutXfermode)
-#if !SK_ARM_NEON_IS_NONE
-    SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkNEONProcCoeffXfermode)
-#endif
 SK_DEFINE_FLATTENABLE_REGISTRAR_GROUP_END

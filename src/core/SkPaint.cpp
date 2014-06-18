@@ -182,6 +182,9 @@ SkPaint::SkPaint() {
 
     fTextSize   = SkPaintDefaults_TextSize;
     fTextScaleX = SK_Scalar1;
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+    fHintingScaleFactor = SK_Scalar1;
+#endif
     fColor      = SK_ColorBLACK;
     fMiterLimit = SkPaintDefaults_MiterLimit;
     fFlags      = SkPaintDefaults_Flags;
@@ -191,6 +194,7 @@ SkPaint::SkPaint() {
     fStyle      = kFill_Style;
     fTextEncoding = kUTF8_TextEncoding;
     fHinting    = SkPaintDefaults_Hinting;
+    fPrivFlags  = 0;
 #ifdef SK_BUILD_FOR_ANDROID
 #ifndef SKPAINTOPTIONS_OPT
     new (&fPaintOptionsAndroid) SkPaintOptionsAndroid;
@@ -547,6 +551,13 @@ void SkPaint::setTextSkewX(SkScalar skewX) {
     fTextSkewX = skewX;
 }
 
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+void SkPaint::setHintingScaleFactor(SkScalar hintingScaleFactor) {
+    GEN_ID_INC_EVAL(hintingScaleFactor != fHintingScaleFactor);
+    fHintingScaleFactor = hintingScaleFactor;
+}
+#endif
+
 void SkPaint::setTextEncoding(TextEncoding encoding) {
     if ((unsigned)encoding <= kGlyphID_TextEncoding) {
         GEN_ID_INC_EVAL((unsigned)encoding != fTextEncoding);
@@ -587,6 +598,10 @@ SkImageFilter* SkPaint::setImageFilter(SkImageFilter* imageFilter) {
 SkAnnotation* SkPaint::setAnnotation(SkAnnotation* annotation) {
     SkRefCnt_SafeAssign(fAnnotation, annotation);
     GEN_ID_INC;
+
+    bool isNoDraw = annotation && annotation->isNoDraw();
+    fPrivFlags = SkSetClearMask(fPrivFlags, isNoDraw, kNoDrawAnnotation_PrivFlag);
+
     return annotation;
 }
 
@@ -1741,6 +1756,9 @@ void SkScalerContext::MakeRec(const SkPaint& paint,
     rec->fTextSize = paint.getTextSize();
     rec->fPreScaleX = paint.getTextScaleX();
     rec->fPreSkewX  = paint.getTextSkewX();
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+    rec->fHintingScaleFactor = paint.getHintingScaleFactor();
+#endif
 
     if (deviceMatrix) {
         rec->fPost2x2[0][0] = sk_relax(deviceMatrix->getScaleX());
@@ -1868,7 +1886,7 @@ void SkScalerContext::MakeRec(const SkPaint& paint,
      * With higher values lcd fringing is worse and the smoothing effect of
      * partial coverage is diminished.
      */
-    rec->setContrast(0.5f);
+    rec->setContrast(SkFloatToScalar(0.5f));
 #endif
 
     rec->fReservedAlign = 0;
@@ -2181,7 +2199,11 @@ enum FlatFlags {
 };
 
 // The size of a flat paint's POD fields
-static const uint32_t kPODPaintSize =   5 * sizeof(SkScalar) +
+// Include an SkScalar for hinting scale factor whether it is
+// supported or not so that an SKP is valid whether it was
+// created with support or not.
+
+static const uint32_t kPODPaintSize =   6 * sizeof(SkScalar) +
                                         1 * sizeof(SkColor) +
                                         1 * sizeof(uint16_t) +
                                         6 * sizeof(uint8_t);
@@ -2218,6 +2240,12 @@ void SkPaint::flatten(SkFlattenableWriteBuffer& buffer) const {
         ptr = write_scalar(ptr, this->getTextSize());
         ptr = write_scalar(ptr, this->getTextScaleX());
         ptr = write_scalar(ptr, this->getTextSkewX());
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+        ptr = write_scalar(ptr, this->getHintingScaleFactor());
+#else
+        // Dummy value.
+        ptr = write_scalar(ptr, SK_Scalar1);
+#endif
         ptr = write_scalar(ptr, this->getStrokeWidth());
         ptr = write_scalar(ptr, this->getStrokeMiter());
         *ptr++ = this->getColor();
@@ -2234,6 +2262,12 @@ void SkPaint::flatten(SkFlattenableWriteBuffer& buffer) const {
         buffer.writeScalar(fTextSize);
         buffer.writeScalar(fTextScaleX);
         buffer.writeScalar(fTextSkewX);
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+        buffer.writeScalar(fHintingScaleFactor);
+#else
+        // Dummy value.
+        buffer.writeScalar(SK_Scalar1);
+#endif
         buffer.writeScalar(fWidth);
         buffer.writeScalar(fMiterLimit);
         buffer.writeColor(fColor);
@@ -2262,13 +2296,7 @@ void SkPaint::flatten(SkFlattenableWriteBuffer& buffer) const {
         buffer.writeFlattenable(this->getRasterizer());
         buffer.writeFlattenable(this->getLooper());
         buffer.writeFlattenable(this->getImageFilter());
-
-        if (fAnnotation) {
-            buffer.writeBool(true);
-            fAnnotation->writeToBuffer(buffer);
-        } else {
-            buffer.writeBool(false);
-        }
+        buffer.writeFlattenable(this->getAnnotation());
     }
 #ifdef SK_BUILD_FOR_ANDROID
     if (flatFlags & kHasNonDefaultPaintOptionsAndroid_FlatFlag) {
@@ -2278,6 +2306,8 @@ void SkPaint::flatten(SkFlattenableWriteBuffer& buffer) const {
 }
 
 void SkPaint::unflatten(SkFlattenableReadBuffer& buffer) {
+    fPrivFlags = 0;
+
     uint8_t flatFlags = 0;
     if (buffer.isOrderedBinaryBuffer()) {
         SkASSERT(SkAlign4(kPODPaintSize) == kPODPaintSize);
@@ -2288,6 +2318,12 @@ void SkPaint::unflatten(SkFlattenableReadBuffer& buffer) {
         this->setTextSize(read_scalar(pod));
         this->setTextScaleX(read_scalar(pod));
         this->setTextSkewX(read_scalar(pod));
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+        this->setHintingScaleFactor(read_scalar(pod));
+#else
+        // Skip the hinting scalar factor, which is not supported.
+        read_scalar(pod);
+#endif
         this->setStrokeWidth(read_scalar(pod));
         this->setStrokeMiter(read_scalar(pod));
         this->setColor(*pod++);
@@ -2314,8 +2350,12 @@ void SkPaint::unflatten(SkFlattenableReadBuffer& buffer) {
         this->setTextSize(buffer.readScalar());
         this->setTextScaleX(buffer.readScalar());
         this->setTextSkewX(buffer.readScalar());
+#ifdef SK_SUPPORT_HINTING_SCALE_FACTOR
+        this->setHintingScaleFactor(buffer.readScalar());
+#else
         // Skip the hinting scalar factor, which is not supported.
         buffer.readScalar();
+#endif
         this->setStrokeWidth(buffer.readScalar());
         this->setStrokeMiter(buffer.readScalar());
         this->setColor(buffer.readColor());
@@ -2337,18 +2377,15 @@ void SkPaint::unflatten(SkFlattenableReadBuffer& buffer) {
     }
 
     if (flatFlags & kHasEffects_FlatFlag) {
-        SkSafeUnref(this->setPathEffect(buffer.readPathEffect()));
-        SkSafeUnref(this->setShader(buffer.readShader()));
-        SkSafeUnref(this->setXfermode(buffer.readXfermode()));
-        SkSafeUnref(this->setMaskFilter(buffer.readMaskFilter()));
-        SkSafeUnref(this->setColorFilter(buffer.readColorFilter()));
-        SkSafeUnref(this->setRasterizer(buffer.readRasterizer()));
-        SkSafeUnref(this->setLooper(buffer.readDrawLooper()));
-        SkSafeUnref(this->setImageFilter(buffer.readImageFilter()));
-
-        if (buffer.readBool()) {
-            this->setAnnotation(SkNEW_ARGS(SkAnnotation, (buffer)))->unref();
-        }
+        SkSafeUnref(this->setPathEffect(buffer.readFlattenableT<SkPathEffect>()));
+        SkSafeUnref(this->setShader(buffer.readFlattenableT<SkShader>()));
+        SkSafeUnref(this->setXfermode(buffer.readFlattenableT<SkXfermode>()));
+        SkSafeUnref(this->setMaskFilter(buffer.readFlattenableT<SkMaskFilter>()));
+        SkSafeUnref(this->setColorFilter(buffer.readFlattenableT<SkColorFilter>()));
+        SkSafeUnref(this->setRasterizer(buffer.readFlattenableT<SkRasterizer>()));
+        SkSafeUnref(this->setLooper(buffer.readFlattenableT<SkDrawLooper>()));
+        SkSafeUnref(this->setImageFilter(buffer.readFlattenableT<SkImageFilter>()));
+        SkSafeUnref(this->setAnnotation(buffer.readFlattenableT<SkAnnotation>()));
     } else {
         this->setPathEffect(NULL);
         this->setShader(NULL);
@@ -2593,6 +2630,7 @@ void SkPaint::toString(SkString* str) const {
     if (this->getFlags()) {
         bool needSeparator = false;
         SkAddFlagToString(str, this->isAntiAlias(), "AntiAlias", &needSeparator);
+        SkAddFlagToString(str, this->isFilterBitmap(), "FilterBitmap", &needSeparator);
         SkAddFlagToString(str, this->isDither(), "Dither", &needSeparator);
         SkAddFlagToString(str, this->isUnderlineText(), "UnderlineText", &needSeparator);
         SkAddFlagToString(str, this->isStrikeThruText(), "StrikeThruText", &needSeparator);
@@ -2611,11 +2649,6 @@ void SkPaint::toString(SkString* str) const {
         str->append("None");
     }
     str->append(")</dd>");
-
-    str->append("<dt>FilterLevel:</dt><dd>");
-    static const char* gFilterLevelStrings[] = { "None", "Low", "Medium", "High" };
-    str->append(gFilterLevelStrings[this->getFilterLevel()]);
-    str->append("</dd>");
 
     str->append("<dt>TextAlign:</dt><dd>");
     static const char* gTextAlignStrings[SkPaint::kAlignCount] = { "Left", "Center", "Right" };

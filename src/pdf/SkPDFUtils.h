@@ -27,7 +27,7 @@ class SkWStream;
 
 #define NOT_IMPLEMENTED(condition, assert)                         \
     do {                                                           \
-        if ((bool)(condition)) {                                   \
+        if (condition) {                                           \
             PRINT_NOT_IMPL("NOT_IMPLEMENTED: " #condition "\n");   \
             SkDEBUGCODE(SkASSERT(!assert);)                        \
         }                                                          \

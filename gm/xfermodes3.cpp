@@ -32,7 +32,7 @@ protected:
     }
 
     virtual SkISize onISize() SK_OVERRIDE {
-        return make_isize(630, 1215);
+        return make_isize(630, 620);
     }
 
     virtual void onDrawBackground(SkCanvas* canvas) SK_OVERRIDE {
@@ -62,50 +62,40 @@ protected:
 
         int test = 0;
         int x = 0, y = 0;
-        static const struct { SkPaint::Style fStyle; SkScalar fWidth; } kStrokes[] = {
-            {SkPaint::kFill_Style, 0},
-            {SkPaint::kStroke_Style, SkIntToScalar(kSize) / 2},
-        };
-        for (size_t s = 0; s < SK_ARRAY_COUNT(kStrokes); ++s) {
-            for (size_t m = 0; m <= SkXfermode::kLastMode; ++m) {
-                SkXfermode::Mode mode = static_cast<SkXfermode::Mode>(m);
-                canvas->drawText(SkXfermode::ModeName(mode),
-                                 strlen(SkXfermode::ModeName(mode)),
-                                 SkIntToScalar(x),
-                                 SkIntToScalar(y + kSize + 3) + labelP.getTextSize(),
-                                 labelP);
-                for (size_t c = 0; c < SK_ARRAY_COUNT(kSolidColors); ++c) {
-                    SkPaint modePaint;
-                    modePaint.setXfermodeMode(mode);
-                    modePaint.setColor(kSolidColors[c]);
-                    modePaint.setStyle(kStrokes[s].fStyle);
-                    modePaint.setStrokeWidth(kStrokes[s].fWidth);
+        for (size_t m = 0; m <= SkXfermode::kLastMode; ++m) {
+            SkXfermode::Mode mode = static_cast<SkXfermode::Mode>(m);
+            canvas->drawText(SkXfermode::ModeName(mode),
+                             strlen(SkXfermode::ModeName(mode)),
+                             SkIntToScalar(x),
+                             SkIntToScalar(y + kSize + 3) + labelP.getTextSize(),
+                             labelP);
+            for (size_t c = 0; c < SK_ARRAY_COUNT(kSolidColors); ++c) {
+                SkPaint modePaint;
+                modePaint.setXfermodeMode(mode);
+                modePaint.setColor(kSolidColors[c]);
 
-                    this->drawMode(canvas, x, y, kSize, kSize, modePaint, tempCanvas.get());
+                this->drawMode(canvas, x, y, kSize, kSize, modePaint, tempCanvas.get());
 
-                    ++test;
-                    x += kSize + 10;
-                    if (!(test % kTestsPerRow)) {
-                        x = 0;
-                        y += kSize + 30;
-                    }
+                ++test;
+                x += kSize + 10;
+                if (!(test % kTestsPerRow)) {
+                    x = 0;
+                    y += kSize + 30;
                 }
-                for (size_t a = 0; a < SK_ARRAY_COUNT(kBmpAlphas); ++a) {
-                    SkPaint modePaint;
-                    modePaint.setXfermodeMode(mode);
-                    modePaint.setAlpha(kBmpAlphas[a]);
-                    modePaint.setShader(fBmpShader);
-                    modePaint.setStyle(kStrokes[s].fStyle);
-                    modePaint.setStrokeWidth(kStrokes[s].fWidth);
+            }
+            for (size_t a = 0; a < SK_ARRAY_COUNT(kBmpAlphas); ++a) {
+                SkPaint modePaint;
+                modePaint.setXfermodeMode(mode);
+                modePaint.setAlpha(kBmpAlphas[a]);
+                modePaint.setShader(fBmpShader);
 
-                    this->drawMode(canvas, x, y, kSize, kSize, modePaint, tempCanvas.get());
+                this->drawMode(canvas, x, y, kSize, kSize, modePaint, tempCanvas.get());
 
-                    ++test;
-                    x += kSize + 10;
-                    if (!(test % kTestsPerRow)) {
-                        x = 0;
-                        y += kSize + 30;
-                    }
+                ++test;
+                x += kSize + 10;
+                if (!(test % kTestsPerRow)) {
+                    x = 0;
+                    y += kSize + 30;
                 }
             }
         }
@@ -132,7 +122,7 @@ private:
             desc.fConfig = rt->config();
             desc.fFlags = kRenderTarget_GrTextureFlagBit;
             SkAutoTUnref<GrSurface> surface(context->createUncachedTexture(desc, NULL, 0));
-            SkAutoTUnref<SkBaseDevice> device(SkGpuDevice::Create(surface.get()));
+            SkAutoTUnref<SkDevice> device(SkGpuDevice::Create(surface.get()));
             if (NULL != device.get()) {
                 tempCanvas = SkNEW_ARGS(SkCanvas, (device.get()));
             }
@@ -188,10 +178,11 @@ private:
             SkPackARGB32(0xFF, 0x40, 0x40, 0x40)
         };
         SkBitmap bg;
-        bg.setConfig(SkBitmap::kARGB_8888_Config, 2, 2, 0, kOpaque_SkAlphaType);
+        bg.setConfig(SkBitmap::kARGB_8888_Config, 2, 2);
         bg.allocPixels();
         SkAutoLockPixels bgAlp(bg);
         memcpy(bg.getPixels(), kCheckData, sizeof(kCheckData));
+        bg.setIsOpaque(true);
 
         fBGShader.reset(SkShader::CreateBitmapShader(bg,
                                                      SkShader::kRepeat_TileMode,

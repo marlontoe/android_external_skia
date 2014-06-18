@@ -18,7 +18,7 @@
 
 class PicturePlaybackBench : public SkBenchmark {
 public:
-    PicturePlaybackBench(const char name[])  {
+    PicturePlaybackBench(void* param, const char name[]) : INHERITED(param) {
         fName.printf("picture_playback_%s", name);
         fPictureWidth = SkIntToScalar(PICTURE_WIDTH);
         fPictureHeight = SkIntToScalar(PICTURE_HEIGHT);
@@ -26,6 +26,7 @@ public:
     }
 
     enum {
+        N = SkBENCHLOOP(200),   // number of times to playback the picture
         PICTURE_WIDTH = 1000,
         PICTURE_HEIGHT = 4000,
         TEXT_SIZE = 10
@@ -35,7 +36,7 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
 
         SkPicture picture;
 
@@ -43,16 +44,16 @@ protected:
         recordCanvas(pCanvas);
         picture.endRecording();
 
-        const SkPoint translateDelta = getTranslateDelta(loops);
+        const SkPoint translateDelta = getTranslateDelta();
 
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < N; i++) {
             picture.draw(canvas);
             canvas->translate(translateDelta.fX, translateDelta.fY);
         }
     }
 
     virtual void recordCanvas(SkCanvas* canvas) = 0;
-    virtual SkPoint getTranslateDelta(int N) {
+    virtual SkPoint getTranslateDelta() {
         SkIPoint canvasSize = onGetSize();
         return SkPoint::Make(SkIntToScalar((PICTURE_WIDTH - canvasSize.fX)/N),
                              SkIntToScalar((PICTURE_HEIGHT- canvasSize.fY)/N));
@@ -69,7 +70,7 @@ private:
 
 class TextPlaybackBench : public PicturePlaybackBench {
 public:
-    TextPlaybackBench() : INHERITED("drawText") { }
+    TextPlaybackBench(void* param) : INHERITED(param, "drawText") { }
 protected:
     virtual void recordCanvas(SkCanvas* canvas) {
         SkPaint paint;
@@ -92,8 +93,8 @@ private:
 
 class PosTextPlaybackBench : public PicturePlaybackBench {
 public:
-    PosTextPlaybackBench(bool drawPosH)
-        : INHERITED(drawPosH ? "drawPosTextH" : "drawPosText")
+    PosTextPlaybackBench(void* param, bool drawPosH)
+        : INHERITED(param, drawPosH ? "drawPosTextH" : "drawPosText")
         , fDrawPosH(drawPosH) { }
 protected:
     virtual void recordCanvas(SkCanvas* canvas) {
@@ -136,6 +137,10 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new TextPlaybackBench(); )
-DEF_BENCH( return new PosTextPlaybackBench(true); )
-DEF_BENCH( return new PosTextPlaybackBench(false); )
+static SkBenchmark* Fact0(void* p) { return new TextPlaybackBench(p); }
+static SkBenchmark* Fact1(void* p) { return new PosTextPlaybackBench(p, true); }
+static SkBenchmark* Fact2(void* p) { return new PosTextPlaybackBench(p, false); }
+
+static BenchRegistry gReg0(Fact0);
+static BenchRegistry gReg1(Fact1);
+static BenchRegistry gReg2(Fact2);

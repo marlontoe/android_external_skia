@@ -10,7 +10,6 @@
 
 #include "GrEffect.h"
 #include "SkMatrix.h"
-#include "GrCoordTransform.h"
 
 class GrTexture;
 
@@ -22,25 +21,32 @@ class GrSingleTextureEffect : public GrEffect {
 public:
     virtual ~GrSingleTextureEffect();
 
+    const SkMatrix& getMatrix() const { return fMatrix; }
+
+    /** Indicates whether the matrix operates on local coords or positions */
+    CoordsType coordsType() const { return fCoordsType; }
+
 protected:
     /** unfiltered, clamp mode */
-    GrSingleTextureEffect(GrTexture*, const SkMatrix&, GrCoordSet = kLocal_GrCoordSet);
+    GrSingleTextureEffect(GrTexture*, const SkMatrix&, CoordsType = kLocal_CoordsType);
     /** clamp mode */
     GrSingleTextureEffect(GrTexture*, const SkMatrix&, GrTextureParams::FilterMode filterMode,
-                          GrCoordSet = kLocal_GrCoordSet);
+                          CoordsType = kLocal_CoordsType);
     GrSingleTextureEffect(GrTexture*,
                           const SkMatrix&,
                           const GrTextureParams&,
-                          GrCoordSet = kLocal_GrCoordSet);
+                          CoordsType = kLocal_CoordsType);
 
     /**
      * Helper for subclass onIsEqual() functions.
      */
-    bool hasSameTextureParamsMatrixAndSourceCoords(const GrSingleTextureEffect& other) const {
+    bool hasSameTextureParamsMatrixAndCoordsType(const GrSingleTextureEffect& other) const {
+        const GrTextureAccess& otherAccess = other.fTextureAccess;
         // We don't have to check the accesses' swizzles because they are inferred from the texture.
-        return fTextureAccess == other.fTextureAccess &&
-               fCoordTransform.getMatrix().cheapEqualTo(other.fCoordTransform.getMatrix()) &&
-               fCoordTransform.sourceCoords() == other.fCoordTransform.sourceCoords();
+        return fTextureAccess.getTexture() == otherAccess.getTexture() &&
+               fTextureAccess.getParams() == otherAccess.getParams() &&
+               this->getMatrix().cheapEqualTo(other.getMatrix()) &&
+               fCoordsType == other.fCoordsType;
     }
 
     /**
@@ -58,8 +64,9 @@ protected:
     }
 
 private:
-    GrCoordTransform fCoordTransform;
-    GrTextureAccess  fTextureAccess;
+    GrTextureAccess fTextureAccess;
+    SkMatrix        fMatrix;
+    CoordsType      fCoordsType;
 
     typedef GrEffect INHERITED;
 };

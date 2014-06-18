@@ -13,9 +13,8 @@
 
 #include "GrConfig.h"
 #include "GrTypes.h"
-#include "GrTHashTable.h"
+#include "GrTHashCache.h"
 #include "GrBinHashKey.h"
-#include "SkMessageBus.h"
 #include "SkTInternalLList.h"
 
 class GrResource;
@@ -54,7 +53,7 @@ public:
     }
 
     GrResourceKey() {
-        fKey.reset();
+        fKey.fHashedKey.reset();
     }
 
     void reset(const GrCacheID& id, ResourceType type, ResourceFlags flags) {
@@ -63,34 +62,41 @@ public:
 
     //!< returns hash value [0..kHashMask] for the key
     int getHash() const {
-        return fKey.getHash() & kHashMask;
+        return fKey.fHashedKey.getHash() & kHashMask;
     }
 
     bool isScratch() const {
         return ScratchDomain() ==
-            *reinterpret_cast<const GrCacheID::Domain*>(fKey.getData() +
+            *reinterpret_cast<const GrCacheID::Domain*>(fKey.fHashedKey.getData() +
                                                         kCacheIDDomainOffset);
     }
 
     ResourceType getResourceType() const {
-        return *reinterpret_cast<const ResourceType*>(fKey.getData() +
+        return *reinterpret_cast<const ResourceType*>(fKey.fHashedKey.getData() +
                                                       kResourceTypeOffset);
     }
 
     ResourceFlags getResourceFlags() const {
-        return *reinterpret_cast<const ResourceFlags*>(fKey.getData() +
+        return *reinterpret_cast<const ResourceFlags*>(fKey.fHashedKey.getData() +
                                                        kResourceFlagsOffset);
     }
 
-    bool operator==(const GrResourceKey& other) const { return fKey == other.fKey; }
-    bool operator<(const GrResourceKey& other) const { return fKey < other.fKey; }
+    int compare(const GrResourceKey& other) const {
+        return fKey.fHashedKey.compare(other.fKey.fHashedKey);
+    }
 
-    static bool LessThan(const GrResourceEntry& entry, const GrResourceKey& key);
-    static bool Equals(const GrResourceEntry& entry, const GrResourceKey& key);
-#ifdef SK_DEBUG
-    static bool LessThan(const GrResourceEntry& a, const GrResourceEntry& b);
-    static bool Equals(const GrResourceEntry& a, const GrResourceEntry& b);
-#endif
+    static bool LT(const GrResourceKey& a, const GrResourceKey& b) {
+        return a.compare(b) < 0;
+    }
+
+    static bool EQ(const GrResourceKey& a, const GrResourceKey& b) {
+        return 0 == a.compare(b);
+    }
+
+    inline static bool LT(const GrResourceEntry& entry, const GrResourceKey& key);
+    inline static bool EQ(const GrResourceEntry& entry, const GrResourceKey& key);
+    inline static bool LT(const GrResourceEntry& a, const GrResourceEntry& b);
+    inline static bool EQ(const GrResourceEntry& a, const GrResourceEntry& b);
 
 private:
     enum {
@@ -118,14 +124,21 @@ private:
         memcpy(k + kResourceTypeOffset, &type, sizeof(ResourceType));
         memcpy(k + kResourceFlagsOffset, &flags, sizeof(ResourceFlags));
         memset(k + kPadOffset, 0, kPadSize);
-        fKey.setKeyData(keyData.fKey32);
+        fKey.fHashedKey.setKeyData(keyData.fKey32);
     }
-    GrBinHashKey<kKeySize> fKey;
-};
 
-// The cache listens for these messages to purge junk resources proactively.
-struct GrResourceInvalidatedMessage {
-    GrResourceKey key;
+    struct Key;
+    typedef GrTBinHashKey<Key, kKeySize> HashedKey;
+
+    struct Key {
+        int compare(const HashedKey& hashedKey) const {
+            return fHashedKey.compare(hashedKey);
+        }
+
+        HashedKey fHashedKey;
+    };
+
+    Key fKey;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -135,7 +148,7 @@ public:
     GrResource* resource() const { return fResource; }
     const GrResourceKey& key() const { return fKey; }
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
     void validate() const;
 #else
     void validate() const {}
@@ -155,25 +168,25 @@ private:
     friend class GrDLinkedList;
 };
 
-inline bool GrResourceKey::LessThan(const GrResourceEntry& entry, const GrResourceKey& key) {
-    return entry.key() < key;
+bool GrResourceKey::LT(const GrResourceEntry& entry, const GrResourceKey& key) {
+    return LT(entry.key(), key);
 }
 
-inline bool GrResourceKey::Equals(const GrResourceEntry& entry, const GrResourceKey& key) {
-    return entry.key() == key;
+bool GrResourceKey::EQ(const GrResourceEntry& entry, const GrResourceKey& key) {
+    return EQ(entry.key(), key);
 }
 
-#ifdef SK_DEBUG
-inline bool GrResourceKey::LessThan(const GrResourceEntry& a, const GrResourceEntry& b) {
-    return a.key() < b.key();
+bool GrResourceKey::LT(const GrResourceEntry& a, const GrResourceEntry& b) {
+    return LT(a.key(), b.key());
 }
 
-inline bool GrResourceKey::Equals(const GrResourceEntry& a, const GrResourceEntry& b) {
-    return a.key() == b.key();
+bool GrResourceKey::EQ(const GrResourceEntry& a, const GrResourceEntry& b) {
+    return EQ(a.key(), b.key());
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
+
+#include "GrTHashCache.h"
 
 /**
  *  Cache of GrResource objects.
@@ -327,7 +340,7 @@ public:
      */
     void purgeAsNeeded(int extraCount = 0, size_t extraBytes = 0);
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
     void validate() const;
 #else
     void validate() const {}
@@ -354,7 +367,7 @@ private:
     typedef SkTInternalLList<GrResourceEntry> EntryList;
     EntryList      fList;
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
     // These objects cannot be returned by a search
     EntryList      fExclusiveList;
 #endif
@@ -384,18 +397,14 @@ private:
 
     void internalPurge(int extraCount, size_t extraBytes);
 
-    // Listen for messages that a resource has been invalidated and purge cached junk proactively.
-    SkMessageBus<GrResourceInvalidatedMessage>::Inbox fInvalidationInbox;
-    void purgeInvalidated();
-
-#ifdef SK_DEBUG
+#if GR_DEBUG
     static size_t countBytes(const SkTInternalLList<GrResourceEntry>& list);
 #endif
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
     class GrAutoResourceCacheValidate {
     public:
         GrAutoResourceCacheValidate(GrResourceCache* cache) : fCache(cache) {

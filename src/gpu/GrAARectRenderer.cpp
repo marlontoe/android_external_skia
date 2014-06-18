@@ -6,18 +6,19 @@
  */
 
 #include "GrAARectRenderer.h"
+#include "GrRefCnt.h"
 #include "GrGpu.h"
 #include "gl/GrGLEffect.h"
-#include "gl/GrGLVertexEffect.h"
 #include "GrTBackendEffectFactory.h"
 #include "SkColorPriv.h"
-#include "effects/GrVertexEffect.h"
+
+SK_DEFINE_INST_COUNT(GrAARectRenderer)
 
 ///////////////////////////////////////////////////////////////////////////////
 class GrGLAlignedRectEffect;
 
 // Axis Aligned special case
-class GrAlignedRectEffect : public GrVertexEffect {
+class GrAlignedRectEffect : public GrEffect {
 public:
     static GrEffectRef* Create() {
         GR_CREATE_STATIC_EFFECT(gAlignedRectEffect, GrAlignedRectEffect, ());
@@ -38,17 +39,16 @@ public:
         return GrTBackendEffectFactory<GrAlignedRectEffect>::getInstance();
     }
 
-    class GLEffect : public GrGLVertexEffect {
+    class GLEffect : public GrGLEffect {
     public:
         GLEffect(const GrBackendEffectFactory& factory, const GrDrawEffect&)
         : INHERITED (factory) {}
 
-        virtual void emitCode(GrGLFullShaderBuilder* builder,
+        virtual void emitCode(GrGLShaderBuilder* builder,
                               const GrDrawEffect& drawEffect,
                               EffectKey key,
                               const char* outputColor,
                               const char* inputColor,
-                              const TransformedCoordsArray&,
                               const TextureSamplerArray& samplers) SK_OVERRIDE {
             // setup the varying for the Axis aligned rect effect
             //      xy -> interpolated offset
@@ -82,9 +82,9 @@ public:
                 "\tcoverage = coverage*scaleH*clamp((%s.w-abs(%s.y))/spanH, 0.0, 1.0);\n",
                 fsRectName, fsRectName);
 
-
-            builder->fsCodeAppendf("\t%s = %s;\n", outputColor,
-                                   (GrGLSLExpr4(inputColor) * GrGLSLExpr1("coverage")).c_str());
+            SkString modulate;
+            GrGLSLModulatef<4>(&modulate, inputColor, "coverage");
+            builder->fsCodeAppendf("\t%s = %s;\n", outputColor, modulate.c_str());
         }
 
         static inline EffectKey GenKey(const GrDrawEffect& drawEffect, const GrGLCaps&) {
@@ -94,12 +94,12 @@ public:
         virtual void setData(const GrGLUniformManager& uman, const GrDrawEffect&) SK_OVERRIDE {}
 
     private:
-        typedef GrGLVertexEffect INHERITED;
+        typedef GrGLEffect INHERITED;
     };
 
 
 private:
-    GrAlignedRectEffect() : GrVertexEffect() {
+    GrAlignedRectEffect() : GrEffect() {
         this->addVertexAttrib(kVec4f_GrSLType);
     }
 
@@ -107,13 +107,13 @@ private:
 
     GR_DECLARE_EFFECT_TEST;
 
-    typedef GrVertexEffect INHERITED;
+    typedef GrEffect INHERITED;
 };
 
 
 GR_DEFINE_EFFECT_TEST(GrAlignedRectEffect);
 
-GrEffectRef* GrAlignedRectEffect::TestCreate(SkRandom* random,
+GrEffectRef* GrAlignedRectEffect::TestCreate(SkMWCRandom* random,
                                              GrContext* context,
                                              const GrDrawTargetCaps&,
                                              GrTexture* textures[]) {
@@ -135,7 +135,7 @@ class GrGLRectEffect;
  * The munged width and height are stored in a vec2 varying ("WidthHeight")
  * with the width in x and the height in y.
  */
-class GrRectEffect : public GrVertexEffect {
+class GrRectEffect : public GrEffect {
 public:
     static GrEffectRef* Create() {
         GR_CREATE_STATIC_EFFECT(gRectEffect, GrRectEffect, ());
@@ -156,17 +156,16 @@ public:
         return GrTBackendEffectFactory<GrRectEffect>::getInstance();
     }
 
-    class GLEffect : public GrGLVertexEffect {
+    class GLEffect : public GrGLEffect {
     public:
         GLEffect(const GrBackendEffectFactory& factory, const GrDrawEffect&)
         : INHERITED (factory) {}
 
-        virtual void emitCode(GrGLFullShaderBuilder* builder,
+        virtual void emitCode(GrGLShaderBuilder* builder,
                               const GrDrawEffect& drawEffect,
                               EffectKey key,
                               const char* outputColor,
                               const char* inputColor,
-                              const TransformedCoordsArray&,
                               const TextureSamplerArray& samplers) SK_OVERRIDE {
             // setup the varying for the center point and the unit vector
             // that points down the height of the rect
@@ -215,9 +214,9 @@ public:
                     "\tcoverage = coverage*scaleH*clamp((%s.y-perpDot)/spanH, 0.0, 1.0);\n",
                     fsWidthHeightName);
 
-
-            builder->fsCodeAppendf("\t%s = %s;\n", outputColor,
-                                   (GrGLSLExpr4(inputColor) * GrGLSLExpr1("coverage")).c_str());
+            SkString modulate;
+            GrGLSLModulatef<4>(&modulate, inputColor, "coverage");
+            builder->fsCodeAppendf("\t%s = %s;\n", outputColor, modulate.c_str());
         }
 
         static inline EffectKey GenKey(const GrDrawEffect& drawEffect, const GrGLCaps&) {
@@ -227,12 +226,12 @@ public:
         virtual void setData(const GrGLUniformManager& uman, const GrDrawEffect&) SK_OVERRIDE {}
 
     private:
-        typedef GrGLVertexEffect INHERITED;
+        typedef GrGLEffect INHERITED;
     };
 
 
 private:
-    GrRectEffect() : GrVertexEffect() {
+    GrRectEffect() : GrEffect() {
         this->addVertexAttrib(kVec4f_GrSLType);
         this->addVertexAttrib(kVec2f_GrSLType);
         this->setWillReadFragmentPosition();
@@ -242,13 +241,13 @@ private:
 
     GR_DECLARE_EFFECT_TEST;
 
-    typedef GrVertexEffect INHERITED;
+    typedef GrEffect INHERITED;
 };
 
 
 GR_DEFINE_EFFECT_TEST(GrRectEffect);
 
-GrEffectRef* GrRectEffect::TestCreate(SkRandom* random,
+GrEffectRef* GrRectEffect::TestCreate(SkMWCRandom* random,
                                       GrContext* context,
                                       const GrDrawTargetCaps&,
                                       GrTexture* textures[]) {
@@ -286,9 +285,8 @@ static void set_inset_fan(GrPoint* pts, size_t stride,
 };
 
 void GrAARectRenderer::reset() {
-    SkSafeSetNull(fAAFillRectIndexBuffer);
-    SkSafeSetNull(fAAMiterStrokeRectIndexBuffer);
-    SkSafeSetNull(fAABevelStrokeRectIndexBuffer);
+    GrSafeSetNull(fAAFillRectIndexBuffer);
+    GrSafeSetNull(fAAStrokeRectIndexBuffer);
 }
 
 static const uint16_t gFillAARectIdx[] = {
@@ -339,7 +337,7 @@ GrIndexBuffer* GrAARectRenderer::aaFillRectIndexBuffer(GrGpu* gpu) {
     return fAAFillRectIndexBuffer;
 }
 
-static const uint16_t gMiterStrokeAARectIdx[] = {
+static const uint16_t gStrokeAARectIdx[] = {
     0 + 0, 1 + 0, 5 + 0, 5 + 0, 4 + 0, 0 + 0,
     1 + 0, 2 + 0, 6 + 0, 6 + 0, 5 + 0, 1 + 0,
     2 + 0, 3 + 0, 7 + 0, 7 + 0, 6 + 0, 2 + 0,
@@ -356,98 +354,24 @@ static const uint16_t gMiterStrokeAARectIdx[] = {
     3 + 8, 0 + 8, 4 + 8, 4 + 8, 7 + 8, 3 + 8,
 };
 
-/**
- * As in miter-stroke, index = a + b, and a is the current index, b is the shift
- * from the first index. The index layout:
- * outer AA line: 0~3, 4~7
- * outer edge:    8~11, 12~15
- * inner edge:    16~19
- * inner AA line: 20~23
- * Following comes a bevel-stroke rect and its indices:
- *
- *           4                                 7
- *            *********************************
- *          *   ______________________________  *
- *         *  / 12                          15 \  *
- *        *  /                                  \  *
- *     0 *  |8     16_____________________19  11 |  * 3
- *       *  |       |                    |       |  *
- *       *  |       |  ****************  |       |  *
- *       *  |       |  * 20        23 *  |       |  *
- *       *  |       |  *              *  |       |  *
- *       *  |       |  * 21        22 *  |       |  *
- *       *  |       |  ****************  |       |  *
- *       *  |       |____________________|       |  *
- *     1 *  |9    17                      18   10|  * 2
- *        *  \                                  /  *
- *         *  \13 __________________________14/  *
- *          *                                   *
- *           **********************************
- *          5                                  6
- */
-static const uint16_t gBevelStrokeAARectIdx[] = {
-    // Draw outer AA, from outer AA line to outer edge, shift is 0.
-    0 + 0, 1 + 0, 9 + 0, 9 + 0, 8 + 0, 0 + 0,
-    1 + 0, 5 + 0, 13 + 0, 13 + 0, 9 + 0, 1 + 0,
-    5 + 0, 6 + 0, 14 + 0, 14 + 0, 13 + 0, 5 + 0,
-    6 + 0, 2 + 0, 10 + 0, 10 + 0, 14 + 0, 6 + 0,
-    2 + 0, 3 + 0, 11 + 0, 11 + 0, 10 + 0, 2 + 0,
-    3 + 0, 7 + 0, 15 + 0, 15 + 0, 11 + 0, 3 + 0,
-    7 + 0, 4 + 0, 12 + 0, 12 + 0, 15 + 0, 7 + 0,
-    4 + 0, 0 + 0, 8 + 0, 8 + 0, 12 + 0, 4 + 0,
-
-    // Draw the stroke, from outer edge to inner edge, shift is 8.
-    0 + 8, 1 + 8, 9 + 8, 9 + 8, 8 + 8, 0 + 8,
-    1 + 8, 5 + 8, 9 + 8,
-    5 + 8, 6 + 8, 10 + 8, 10 + 8, 9 + 8, 5 + 8,
-    6 + 8, 2 + 8, 10 + 8,
-    2 + 8, 3 + 8, 11 + 8, 11 + 8, 10 + 8, 2 + 8,
-    3 + 8, 7 + 8, 11 + 8,
-    7 + 8, 4 + 8, 8 + 8, 8 + 8, 11 + 8, 7 + 8,
-    4 + 8, 0 + 8, 8 + 8,
-
-    // Draw the inner AA, from inner edge to inner AA line, shift is 16.
-    0 + 16, 1 + 16, 5 + 16, 5 + 16, 4 + 16, 0 + 16,
-    1 + 16, 2 + 16, 6 + 16, 6 + 16, 5 + 16, 1 + 16,
-    2 + 16, 3 + 16, 7 + 16, 7 + 16, 6 + 16, 2 + 16,
-    3 + 16, 0 + 16, 4 + 16, 4 + 16, 7 + 16, 3 + 16,
-};
-
-int GrAARectRenderer::aaStrokeRectIndexCount(bool miterStroke) {
-    return miterStroke ? GR_ARRAY_COUNT(gMiterStrokeAARectIdx) :
-                         GR_ARRAY_COUNT(gBevelStrokeAARectIdx);
+int GrAARectRenderer::aaStrokeRectIndexCount() {
+    return GR_ARRAY_COUNT(gStrokeAARectIdx);
 }
 
-GrIndexBuffer* GrAARectRenderer::aaStrokeRectIndexBuffer(GrGpu* gpu, bool miterStroke) {
-    if (miterStroke) {
-        if (NULL == fAAMiterStrokeRectIndexBuffer) {
-            fAAMiterStrokeRectIndexBuffer =
-                gpu->createIndexBuffer(sizeof(gMiterStrokeAARectIdx), false);
-            if (NULL != fAAMiterStrokeRectIndexBuffer) {
-#ifdef SK_DEBUG
-                bool updated =
+GrIndexBuffer* GrAARectRenderer::aaStrokeRectIndexBuffer(GrGpu* gpu) {
+    if (NULL == fAAStrokeRectIndexBuffer) {
+        fAAStrokeRectIndexBuffer =
+                  gpu->createIndexBuffer(sizeof(gStrokeAARectIdx), false);
+        if (NULL != fAAStrokeRectIndexBuffer) {
+#if GR_DEBUG
+            bool updated =
 #endif
-                fAAMiterStrokeRectIndexBuffer->updateData(gMiterStrokeAARectIdx,
-                                                          sizeof(gMiterStrokeAARectIdx));
-                GR_DEBUGASSERT(updated);
-            }
+            fAAStrokeRectIndexBuffer->updateData(gStrokeAARectIdx,
+                                                 sizeof(gStrokeAARectIdx));
+            GR_DEBUGASSERT(updated);
         }
-        return fAAMiterStrokeRectIndexBuffer;
-    } else {
-        if (NULL == fAABevelStrokeRectIndexBuffer) {
-            fAABevelStrokeRectIndexBuffer =
-                gpu->createIndexBuffer(sizeof(gBevelStrokeAARectIdx), false);
-            if (NULL != fAABevelStrokeRectIndexBuffer) {
-#ifdef SK_DEBUG
-                bool updated =
-#endif
-                fAABevelStrokeRectIndexBuffer->updateData(gBevelStrokeAARectIdx,
-                                                          sizeof(gBevelStrokeAARectIdx));
-                GR_DEBUGASSERT(updated);
-            }
-        }
-        return fAABevelStrokeRectIndexBuffer;
     }
+    return fAAStrokeRectIndexBuffer;
 }
 
 void GrAARectRenderer::geometryFillAARect(GrGpu* gpu,
@@ -474,7 +398,7 @@ void GrAARectRenderer::geometryFillAARect(GrGpu* gpu,
 
     intptr_t verts = reinterpret_cast<intptr_t>(geo.vertices());
     size_t vsize = drawState->getVertexSize();
-    SkASSERT(sizeof(GrPoint) + sizeof(GrColor) == vsize);
+    GrAssert(sizeof(GrPoint) + sizeof(GrColor) == vsize);
 
     GrPoint* fan0Pos = reinterpret_cast<GrPoint*>(verts);
     GrPoint* fan1Pos = reinterpret_cast<GrPoint*>(verts + 4 * vsize);
@@ -621,7 +545,7 @@ void GrAARectRenderer::shaderFillAARect(GrGpu* gpu,
     SkScalar newWidth = SkScalarHalf(rect.width() * vec[0].length()) + SK_ScalarHalf;
     SkScalar newHeight = SkScalarHalf(rect.height() * vec[1].length()) + SK_ScalarHalf;
     drawState->setVertexAttribs<gAARectVertexAttribs>(SK_ARRAY_COUNT(gAARectVertexAttribs));
-    SkASSERT(sizeof(RectVertex) == drawState->getVertexSize());
+    GrAssert(sizeof(RectVertex) == drawState->getVertexSize());
 
     GrDrawTarget::AutoReleaseGeometry geo(target, 4, 0);
     if (!geo.succeeded()) {
@@ -671,7 +595,7 @@ void GrAARectRenderer::shaderFillAlignedAARect(GrGpu* gpu,
     SkASSERT(combinedMatrix.rectStaysRect());
 
     drawState->setVertexAttribs<gAAAARectVertexAttribs>(SK_ARRAY_COUNT(gAAAARectVertexAttribs));
-    SkASSERT(sizeof(AARectVertex) == drawState->getVertexSize());
+    GrAssert(sizeof(AARectVertex) == drawState->getVertexSize());
 
     GrDrawTarget::AutoReleaseGeometry geo(target, 4, 0);
     if (!geo.succeeded()) {
@@ -726,10 +650,9 @@ void GrAARectRenderer::strokeAARect(GrGpu* gpu,
                                     const SkRect& rect,
                                     const SkMatrix& combinedMatrix,
                                     const SkRect& devRect,
-                                    const SkStrokeRec* stroke,
+                                    SkScalar width,
                                     bool useVertexCoverage) {
     GrVec devStrokeSize;
-    SkScalar width = stroke->getWidth();
     if (width > 0) {
         devStrokeSize.set(width, width);
         combinedMatrix.mapVectors(&devStrokeSize, 1);
@@ -761,13 +684,7 @@ void GrAARectRenderer::strokeAARect(GrGpu* gpu,
     SkRect devOutside(devRect);
     devOutside.outset(rx, ry);
 
-    bool miterStroke = true;
-    // small miter limit means right angles show bevel...
-    if (stroke->getJoin() != SkPaint::kMiter_Join || stroke->getMiter() < SK_ScalarSqrt2) {
-        miterStroke = false;
-    }
-
-    if (spare <= 0 && miterStroke) {
+    if (spare <= 0) {
         this->fillAARect(gpu, target, devOutside, SkMatrix::I(),
                          devOutside, useVertexCoverage);
         return;
@@ -776,41 +693,24 @@ void GrAARectRenderer::strokeAARect(GrGpu* gpu,
     SkRect devInside(devRect);
     devInside.inset(rx, ry);
 
-    SkRect devOutsideAssist(devRect);
-
-    // For bevel-stroke, use 2 SkRect instances(devOutside and devOutsideAssist)
-    // to draw the outer of the rect. Because there are 8 vertices on the outer
-    // edge, while vertex number of inner edge is 4, the same as miter-stroke.
-    if (!miterStroke) {
-        devOutside.inset(0, ry);
-        devOutsideAssist.outset(0, ry);
-    }
-
-    this->geometryStrokeAARect(gpu, target, devOutside, devOutsideAssist,
-                               devInside, useVertexCoverage, miterStroke);
+    this->geometryStrokeAARect(gpu, target, devOutside, devInside, useVertexCoverage);
 }
 
 void GrAARectRenderer::geometryStrokeAARect(GrGpu* gpu,
                                             GrDrawTarget* target,
                                             const SkRect& devOutside,
-                                            const SkRect& devOutsideAssist,
                                             const SkRect& devInside,
-                                            bool useVertexCoverage,
-                                            bool miterStroke) {
+                                            bool useVertexCoverage) {
     GrDrawState* drawState = target->drawState();
 
     set_aa_rect_vertex_attributes(drawState, useVertexCoverage);
 
-    int innerVertexNum = 4;
-    int outerVertexNum = miterStroke ? 4 : 8;
-    int totalVertexNum = (outerVertexNum + innerVertexNum) * 2;
-
-    GrDrawTarget::AutoReleaseGeometry geo(target, totalVertexNum, 0);
+    GrDrawTarget::AutoReleaseGeometry geo(target, 16, 0);
     if (!geo.succeeded()) {
         GrPrintf("Failed to get space for vertices!\n");
         return;
     }
-    GrIndexBuffer* indexBuffer = this->aaStrokeRectIndexBuffer(gpu, miterStroke);
+    GrIndexBuffer* indexBuffer = this->aaStrokeRectIndexBuffer(gpu);
     if (NULL == indexBuffer) {
         GrPrintf("Failed to create index buffer!\n");
         return;
@@ -818,15 +718,15 @@ void GrAARectRenderer::geometryStrokeAARect(GrGpu* gpu,
 
     intptr_t verts = reinterpret_cast<intptr_t>(geo.vertices());
     size_t vsize = drawState->getVertexSize();
-    SkASSERT(sizeof(GrPoint) + sizeof(GrColor) == vsize);
+    GrAssert(sizeof(GrPoint) + sizeof(GrColor) == vsize);
 
     // We create vertices for four nested rectangles. There are two ramps from 0 to full
     // coverage, one on the exterior of the stroke and the other on the interior.
     // The following pointers refer to the four rects, from outermost to innermost.
     GrPoint* fan0Pos = reinterpret_cast<GrPoint*>(verts);
-    GrPoint* fan1Pos = reinterpret_cast<GrPoint*>(verts + outerVertexNum * vsize);
-    GrPoint* fan2Pos = reinterpret_cast<GrPoint*>(verts + 2 * outerVertexNum * vsize);
-    GrPoint* fan3Pos = reinterpret_cast<GrPoint*>(verts + (2 * outerVertexNum + innerVertexNum) * vsize);
+    GrPoint* fan1Pos = reinterpret_cast<GrPoint*>(verts + 4 * vsize);
+    GrPoint* fan2Pos = reinterpret_cast<GrPoint*>(verts + 8 * vsize);
+    GrPoint* fan3Pos = reinterpret_cast<GrPoint*>(verts + 12 * vsize);
 
 #ifndef SK_IGNORE_THIN_STROKED_RECT_FIX
     // TODO: this only really works if the X & Y margins are the same all around
@@ -834,42 +734,23 @@ void GrAARectRenderer::geometryStrokeAARect(GrGpu* gpu,
     SkScalar inset = SkMinScalar(SK_Scalar1, devOutside.fRight - devInside.fRight);
     inset = SkMinScalar(inset, devInside.fLeft - devOutside.fLeft);
     inset = SkMinScalar(inset, devInside.fTop - devOutside.fTop);
-    if (miterStroke) {
-        inset = SK_ScalarHalf * SkMinScalar(inset, devOutside.fBottom - devInside.fBottom);
-    } else {
-        inset = SK_ScalarHalf * SkMinScalar(inset, devOutsideAssist.fBottom - devInside.fBottom);
-    }
+    inset = SK_ScalarHalf * SkMinScalar(inset, devOutside.fBottom - devInside.fBottom);
     SkASSERT(inset >= 0);
 #else
     SkScalar inset = SK_ScalarHalf;
 #endif
 
-    if (miterStroke) {
-        // outermost
-        set_inset_fan(fan0Pos, vsize, devOutside, -SK_ScalarHalf, -SK_ScalarHalf);
-        // inner two
-        set_inset_fan(fan1Pos, vsize, devOutside,  inset,  inset);
-        set_inset_fan(fan2Pos, vsize, devInside,  -inset, -inset);
-        // innermost
-        set_inset_fan(fan3Pos, vsize, devInside,   SK_ScalarHalf,  SK_ScalarHalf);
-    } else {
-        GrPoint* fan0AssistPos = reinterpret_cast<GrPoint*>(verts + 4 * vsize);
-        GrPoint* fan1AssistPos = reinterpret_cast<GrPoint*>(verts + (outerVertexNum + 4) * vsize);
-        // outermost
-        set_inset_fan(fan0Pos, vsize, devOutside, -SK_ScalarHalf, -SK_ScalarHalf);
-        set_inset_fan(fan0AssistPos, vsize, devOutsideAssist, -SK_ScalarHalf, -SK_ScalarHalf);
-        // outer one of the inner two
-        set_inset_fan(fan1Pos, vsize, devOutside,  inset,  inset);
-        set_inset_fan(fan1AssistPos, vsize, devOutsideAssist,  inset,  inset);
-        // inner one of the inner two
-        set_inset_fan(fan2Pos, vsize, devInside,  -inset, -inset);
-        // innermost
-        set_inset_fan(fan3Pos, vsize, devInside,   SK_ScalarHalf,  SK_ScalarHalf);
-    }
+    // outermost
+    set_inset_fan(fan0Pos, vsize, devOutside, -SK_ScalarHalf, -SK_ScalarHalf);
+    // inner two
+    set_inset_fan(fan1Pos, vsize, devOutside,  inset,  inset);
+    set_inset_fan(fan2Pos, vsize, devInside,  -inset, -inset);
+    // innermost
+    set_inset_fan(fan3Pos, vsize, devInside,   SK_ScalarHalf,  SK_ScalarHalf);
 
     // The outermost rect has 0 coverage
     verts += sizeof(GrPoint);
-    for (int i = 0; i < outerVertexNum; ++i) {
+    for (int i = 0; i < 4; ++i) {
         *reinterpret_cast<GrColor*>(verts + i * vsize) = 0;
     }
 
@@ -893,20 +774,20 @@ void GrAARectRenderer::geometryStrokeAARect(GrGpu* gpu,
         }
     }
 
-    verts += outerVertexNum * vsize;
-    for (int i = 0; i < outerVertexNum + innerVertexNum; ++i) {
+    verts += 4 * vsize;
+    for (int i = 0; i < 8; ++i) {
         *reinterpret_cast<GrColor*>(verts + i * vsize) = innerColor;
     }
 
     // The innermost rect has 0 coverage
-    verts += (outerVertexNum + innerVertexNum) * vsize;
-    for (int i = 0; i < innerVertexNum; ++i) {
+    verts += 8 * vsize;
+    for (int i = 0; i < 4; ++i) {
         *reinterpret_cast<GrColor*>(verts + i * vsize) = 0;
     }
 
     target->setIndexSourceToBuffer(indexBuffer);
-    target->drawIndexed(kTriangles_GrPrimitiveType, 0, 0,
-                        totalVertexNum, aaStrokeRectIndexCount(miterStroke));
+    target->drawIndexed(kTriangles_GrPrimitiveType,
+                        0, 0, 16, aaStrokeRectIndexCount());
 }
 
 void GrAARectRenderer::fillAANestedRects(GrGpu* gpu,
@@ -917,7 +798,7 @@ void GrAARectRenderer::fillAANestedRects(GrGpu* gpu,
     SkASSERT(combinedMatrix.rectStaysRect());
     SkASSERT(!rects[1].isEmpty());
 
-    SkRect devOutside, devOutsideAssist, devInside;
+    SkRect devOutside, devInside;
     combinedMatrix.mapRect(&devOutside, rects[0]);
     // can't call mapRect for devInside since it calls sort
     combinedMatrix.mapPoints((SkPoint*)&devInside, (const SkPoint*)&rects[1], 2);
@@ -927,6 +808,5 @@ void GrAARectRenderer::fillAANestedRects(GrGpu* gpu,
         return;
     }
 
-    this->geometryStrokeAARect(gpu, target, devOutside, devOutsideAssist,
-                               devInside, useVertexCoverage, true);
+    this->geometryStrokeAARect(gpu, target, devOutside, devInside, useVertexCoverage);
 }

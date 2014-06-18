@@ -12,23 +12,22 @@
 #if SK_USE_CONDENSED_INFO == 0
 
 const SkMemberInfo SkDrawEmboss::fInfo[] = {
-    SK_MEMBER(fAmbient, Float),
-    SK_MEMBER_ARRAY(fDirection, Float),
-    SK_MEMBER(fSigma, Float),
-    SK_MEMBER(fSpecular, Float)
+    SK_MEMBER(ambient, Float),
+    SK_MEMBER_ARRAY(direction, Float),
+    SK_MEMBER(radius, Float),
+    SK_MEMBER(specular, Float)
 };
 
 #endif
 
 DEFINE_GET_MEMBER(SkDrawEmboss);
 
-SkDrawEmboss::SkDrawEmboss() : fSigma(-1) {
-    fDirection.setCount(3);
+SkDrawEmboss::SkDrawEmboss() : radius(-1) {
+    direction.setCount(3);
 }
 
 SkMaskFilter* SkDrawEmboss::getMaskFilter() {
-    if (fSigma < 0 || fDirection.count() !=3)
+    if (radius < 0 || direction.count() !=3)
         return NULL;
-    return SkBlurMaskFilter::CreateEmboss(fSigma, fDirection.begin(),
-                                          fAmbient, fSpecular);
+    return SkBlurMaskFilter::CreateEmboss(direction.begin(), ambient, specular, radius);
 }

@@ -6,15 +6,16 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
+
 #include "SkTypes.h"
 #include "SkTFitsIn.h"
-
 #include <limits>
+
+namespace {
 
 #define TEST(S, s, D, expected) REPORTER_ASSERT(reporter, (SkTFitsIn<D>((S)(s)) == (expected)))
 
-DEF_TEST(FitsIn, reporter) {
+static void FitsInTest(skiatest::Reporter* reporter) {
     TEST(int32_t,  1, int8_t, true);
     TEST(int32_t, -1, int8_t, true);
     TEST(int32_t,  (int32_t)(std::numeric_limits<int8_t>::max)(),    int8_t, true);
@@ -68,3 +69,8 @@ DEF_TEST(FitsIn, reporter) {
     // Uncommenting the following should cause compile failures.
     //TEST(float, 1, uint64_t, true);
 }
+
+}
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("FitsIn", FitsInTestClass, FitsInTest)

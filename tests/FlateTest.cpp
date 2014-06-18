@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
@@ -5,11 +6,11 @@
  * found in the LICENSE file.
  */
 
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkData.h"
 #include "SkFlate.h"
 #include "SkStream.h"
@@ -84,7 +85,7 @@ static void TestFlate(skiatest::Reporter* reporter, SkMemoryStream* testStream,
                                      testData.getLength()) == 0);
 }
 
-DEF_TEST(Flate, reporter) {
+static void TestFlateCompression(skiatest::Reporter* reporter) {
     TestFlate(reporter, NULL, 0);
 #if defined(SK_ZLIB_INCLUDE) && !defined(SK_DEBUG)
     REPORTER_ASSERT(reporter, SkFlate::HaveFlate());
@@ -98,3 +99,6 @@ DEF_TEST(Flate, reporter) {
     TestFlate(reporter, &fileStream, 10240);
 #endif
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Flate", FlateTestClass, TestFlateCompression)

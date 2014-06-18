@@ -61,10 +61,6 @@ struct SkDQuad {
     }
     SkDCubic toCubic() const;
     SkDPoint top(double startT, double endT) const;
-
-#ifdef SK_DEBUG
-    void dump();
-#endif
 private:
 //  static double Tangent(const double* quadratic, double t);  // uncalled
 };

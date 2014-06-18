@@ -27,10 +27,11 @@ public:
         kPartial_Clear
     };
 
-    GameBench(Type type, Clear clear,
+    GameBench(void* param, Type type, Clear clear,
               bool aligned = false, bool useAtlas = false,
               bool useDrawVertices = false)
-        : fType(type)
+        : INHERITED(param)
+        , fType(type)
         , fClear(clear)
         , fAligned(aligned)
         , fUseAtlas(useAtlas)
@@ -86,10 +87,10 @@ protected:
         }
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
-        SkRandom scaleRand;
-        SkRandom transRand;
-        SkRandom rotRand;
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
+        SkMWCRandom scaleRand;
+        SkMWCRandom transRand;
+        SkMWCRandom rotRand;
 
         int width, height;
         if (fUseAtlas) {
@@ -134,16 +135,17 @@ protected:
 
         SkPaint p;
         p.setColor(0xFF000000);
-        p.setFilterLevel(SkPaint::kLow_FilterLevel);
+        p.setFilterBitmap(true);
 
         SkPaint p2;         // for drawVertices path
         p2.setColor(0xFF000000);
-        p2.setFilterLevel(SkPaint::kLow_FilterLevel);
+        p2.setFilterBitmap(true);
         p2.setShader(SkShader::CreateBitmapShader(fAtlas,
                                                   SkShader::kClamp_TileMode,
                                                   SkShader::kClamp_TileMode))->unref();
 
-        for (int i = 0; i < loops; ++i, ++fNumSaved) {
+        for (int i = 0; i < kNumRects; ++i, ++fNumSaved) {
+
             if (0 == i % kNumBeforeClear) {
                 if (kPartial_Clear == fClear) {
                     for (int j = 0; j < fNumSaved; ++j) {
@@ -205,8 +207,7 @@ protected:
                                          4, verts, uvs, NULL, NULL,
                                          indices, 6, p2);
                 } else {
-                    canvas->drawBitmapRect(fAtlas, &src, dst, &p,
-                                           SkCanvas::kBleed_DrawBitmapRectFlag);
+                    canvas->drawBitmapRect(fAtlas, &src, dst, &p);
                 }
             } else {
                 canvas->drawBitmapRect(fCheckerboard, NULL, dst, &p);
@@ -227,7 +228,15 @@ private:
                                        (kNumAtlasedX+1) * kAtlasSpacer;
     static const int kTotAtlasHeight = kNumAtlasedY * kAtlasCellHeight +
                                        (kNumAtlasedY+1) * kAtlasSpacer;
-    static const int kNumBeforeClear = 100;
+
+#ifdef SK_DEBUG
+    static const int kNumRects = 100;
+    static const int kNumBeforeClear = 10;
+#else
+    static const int kNumRects = 5000;
+    static const int kNumBeforeClear = 300;
+#endif
+
 
     Type     fType;
     Clear    fClear;
@@ -270,7 +279,7 @@ private:
 
     // Note: the resulting atlas has transparency
     void makeAtlas() {
-        SkRandom rand;
+        SkMWCRandom rand;
 
         SkColor colors[kNumAtlasedX][kNumAtlasedY];
 
@@ -312,27 +321,27 @@ private:
 };
 
 // Partial clear
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kScale_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kScale_Type,
                                             GameBench::kPartial_Clear)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kPartial_Clear)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kPartial_Clear, true)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kRotate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kRotate_Type,
                                             GameBench::kPartial_Clear)); )
 
 // Full clear
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kScale_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kScale_Type,
                                             GameBench::kFull_Clear)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kFull_Clear)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kFull_Clear, true)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kRotate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kRotate_Type,
                                             GameBench::kFull_Clear)); )
 
 // Atlased
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kFull_Clear, false, true)); )
-DEF_BENCH( return SkNEW_ARGS(GameBench, (GameBench::kTranslate_Type,
+DEF_BENCH( return SkNEW_ARGS(GameBench, (p, GameBench::kTranslate_Type,
                                             GameBench::kFull_Clear, false, true, true)); )

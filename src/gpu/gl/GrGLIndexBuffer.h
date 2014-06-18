@@ -45,7 +45,7 @@ protected:
 
 private:
     GrGpuGL* getGpuGL() const {
-        SkASSERT(this->isValid());
+        GrAssert(this->isValid());
         return (GrGpuGL*)(this->getGpu());
     }
 

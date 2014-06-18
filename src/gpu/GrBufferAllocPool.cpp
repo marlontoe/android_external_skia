@@ -14,7 +14,7 @@
 #include "GrTypes.h"
 #include "GrVertexBuffer.h"
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
     #define VALIDATE validate
 #else
     static void VALIDATE(bool = false) {}
@@ -30,7 +30,7 @@ GrBufferAllocPool::GrBufferAllocPool(GrGpu* gpu,
                                      int preallocBufferCnt) :
         fBlocks(GrMax(8, 2*preallocBufferCnt)) {
 
-    SkASSERT(NULL != gpu);
+    GrAssert(NULL != gpu);
     fGpu = gpu;
     fGpu->ref();
     fGpuIsReffed = true;
@@ -97,7 +97,7 @@ void GrBufferAllocPool::reset() {
     // we may have created a large cpu mirror of a large VB. Reset the size
     // to match our pre-allocated VBs.
     fCpuData.reset(fMinBlockSize);
-    SkASSERT(0 == fPreallocBuffersInUse);
+    GrAssert(0 == fPreallocBuffersInUse);
     VALIDATE();
 }
 
@@ -117,35 +117,35 @@ void GrBufferAllocPool::unlock() {
     VALIDATE();
 }
 
-#ifdef SK_DEBUG
+#if GR_DEBUG
 void GrBufferAllocPool::validate(bool unusedBlockAllowed) const {
     if (NULL != fBufferPtr) {
-        SkASSERT(!fBlocks.empty());
+        GrAssert(!fBlocks.empty());
         if (fBlocks.back().fBuffer->isLocked()) {
             GrGeometryBuffer* buf = fBlocks.back().fBuffer;
-            SkASSERT(buf->lockPtr() == fBufferPtr);
+            GrAssert(buf->lockPtr() == fBufferPtr);
         } else {
-            SkASSERT(fCpuData.get() == fBufferPtr);
+            GrAssert(fCpuData.get() == fBufferPtr);
         }
     } else {
-        SkASSERT(fBlocks.empty() || !fBlocks.back().fBuffer->isLocked());
+        GrAssert(fBlocks.empty() || !fBlocks.back().fBuffer->isLocked());
     }
     size_t bytesInUse = 0;
     for (int i = 0; i < fBlocks.count() - 1; ++i) {
-        SkASSERT(!fBlocks[i].fBuffer->isLocked());
+        GrAssert(!fBlocks[i].fBuffer->isLocked());
     }
     for (int i = 0; i < fBlocks.count(); ++i) {
         size_t bytes = fBlocks[i].fBuffer->sizeInBytes() - fBlocks[i].fBytesFree;
         bytesInUse += bytes;
-        SkASSERT(bytes || unusedBlockAllowed);
+        GrAssert(bytes || unusedBlockAllowed);
     }
 
-    SkASSERT(bytesInUse == fBytesInUse);
+    GrAssert(bytesInUse == fBytesInUse);
     if (unusedBlockAllowed) {
-        SkASSERT((fBytesInUse && !fBlocks.empty()) ||
+        GrAssert((fBytesInUse && !fBlocks.empty()) ||
                  (!fBytesInUse && (fBlocks.count() < 2)));
     } else {
-        SkASSERT((0 == fBytesInUse) == fBlocks.empty());
+        GrAssert((0 == fBytesInUse) == fBlocks.empty());
     }
 }
 #endif
@@ -156,8 +156,8 @@ void* GrBufferAllocPool::makeSpace(size_t size,
                                    size_t* offset) {
     VALIDATE();
 
-    SkASSERT(NULL != buffer);
-    SkASSERT(NULL != offset);
+    GrAssert(NULL != buffer);
+    GrAssert(NULL != offset);
 
     if (NULL != fBufferPtr) {
         BufferBlock& back = fBlocks.back();
@@ -186,7 +186,7 @@ void* GrBufferAllocPool::makeSpace(size_t size,
     if (!createBlock(size)) {
         return NULL;
     }
-    SkASSERT(NULL != fBufferPtr);
+    GrAssert(NULL != fBufferPtr);
 
     *offset = 0;
     BufferBlock& back = fBlocks.back();
@@ -203,9 +203,9 @@ int GrBufferAllocPool::currentBufferItems(size_t itemSize) const {
         const BufferBlock& back = fBlocks.back();
         size_t usedBytes = back.fBuffer->sizeInBytes() - back.fBytesFree;
         size_t pad = GrSizeAlignUpPad(usedBytes, itemSize);
-        return static_cast<int>((back.fBytesFree - pad) / itemSize);
+        return (back.fBytesFree - pad) / itemSize;
     } else if (fPreallocBuffersInUse < fPreallocBuffers.count()) {
-        return static_cast<int>(fMinBlockSize / itemSize);
+        return fMinBlockSize / itemSize;
     }
     return 0;
 }
@@ -229,7 +229,7 @@ void GrBufferAllocPool::putBack(size_t bytes) {
 
     while (bytes) {
         // caller shouldnt try to put back more than they've taken
-        SkASSERT(!fBlocks.empty());
+        GrAssert(!fBlocks.empty());
         BufferBlock& block = fBlocks.back();
         size_t bytesUsed = block.fBuffer->sizeInBytes() - block.fBytesFree;
         if (bytes >= bytesUsed) {
@@ -259,7 +259,7 @@ void GrBufferAllocPool::putBack(size_t bytes) {
 bool GrBufferAllocPool::createBlock(size_t requestSize) {
 
     size_t size = GrMax(requestSize, fMinBlockSize);
-    SkASSERT(size >= GrBufferAllocPool_MIN_BLOCK_SIZE);
+    GrAssert(size >= GrBufferAllocPool_MIN_BLOCK_SIZE);
 
     VALIDATE();
 
@@ -284,7 +284,7 @@ bool GrBufferAllocPool::createBlock(size_t requestSize) {
 
     block.fBytesFree = size;
     if (NULL != fBufferPtr) {
-        SkASSERT(fBlocks.count() > 1);
+        GrAssert(fBlocks.count() > 1);
         BufferBlock& prev = fBlocks.fromBack(1);
         if (prev.fBuffer->isLocked()) {
             prev.fBuffer->unlock();
@@ -295,7 +295,7 @@ bool GrBufferAllocPool::createBlock(size_t requestSize) {
         fBufferPtr = NULL;
     }
 
-    SkASSERT(NULL == fBufferPtr);
+    GrAssert(NULL == fBufferPtr);
 
     // If the buffer is CPU-backed we lock it because it is free to do so and saves a copy.
     // Otherwise when buffer locking is supported:
@@ -325,7 +325,7 @@ bool GrBufferAllocPool::createBlock(size_t requestSize) {
 }
 
 void GrBufferAllocPool::destroyBlock() {
-    SkASSERT(!fBlocks.empty());
+    GrAssert(!fBlocks.empty());
 
     BufferBlock& block = fBlocks.back();
     if (fPreallocBuffersInUse > 0) {
@@ -337,7 +337,7 @@ void GrBufferAllocPool::destroyBlock() {
             --fPreallocBuffersInUse;
         }
     }
-    SkASSERT(!block.fBuffer->isLocked());
+    GrAssert(!block.fBuffer->isLocked());
     block.fBuffer->unref();
     fBlocks.pop_back();
     fBufferPtr = NULL;
@@ -345,10 +345,10 @@ void GrBufferAllocPool::destroyBlock() {
 
 void GrBufferAllocPool::flushCpuData(GrGeometryBuffer* buffer,
                                      size_t flushSize) {
-    SkASSERT(NULL != buffer);
-    SkASSERT(!buffer->isLocked());
-    SkASSERT(fCpuData.get() == fBufferPtr);
-    SkASSERT(flushSize <= buffer->sizeInBytes());
+    GrAssert(NULL != buffer);
+    GrAssert(!buffer->isLocked());
+    GrAssert(fCpuData.get() == fBufferPtr);
+    GrAssert(flushSize <= buffer->sizeInBytes());
     VALIDATE(true);
 
     if (fGpu->caps()->bufferLockSupport() &&
@@ -368,7 +368,7 @@ GrGeometryBuffer* GrBufferAllocPool::createBuffer(size_t size) {
     if (kIndex_BufferType == fBufferType) {
         return fGpu->createIndexBuffer(size, true);
     } else {
-        SkASSERT(kVertex_BufferType == fBufferType);
+        GrAssert(kVertex_BufferType == fBufferType);
         return fGpu->createVertexBuffer(size, true);
     }
 }
@@ -391,9 +391,9 @@ void* GrVertexBufferAllocPool::makeSpace(size_t vertexSize,
                                          const GrVertexBuffer** buffer,
                                          int* startVertex) {
 
-    SkASSERT(vertexCount >= 0);
-    SkASSERT(NULL != buffer);
-    SkASSERT(NULL != startVertex);
+    GrAssert(vertexCount >= 0);
+    GrAssert(NULL != buffer);
+    GrAssert(NULL != startVertex);
 
     size_t offset = 0; // assign to suppress warning
     const GrGeometryBuffer* geomBuffer = NULL; // assign to suppress warning
@@ -403,8 +403,8 @@ void* GrVertexBufferAllocPool::makeSpace(size_t vertexSize,
                                      &offset);
 
     *buffer = (const GrVertexBuffer*) geomBuffer;
-    SkASSERT(0 == offset % vertexSize);
-    *startVertex = static_cast<int>(offset / vertexSize);
+    GrAssert(0 == offset % vertexSize);
+    *startVertex = offset / vertexSize;
     return ptr;
 }
 
@@ -425,7 +425,7 @@ bool GrVertexBufferAllocPool::appendVertices(size_t vertexSize,
 }
 
 int GrVertexBufferAllocPool::preallocatedBufferVertices(size_t vertexSize) const {
-    return static_cast<int>(INHERITED::preallocatedBufferSize() / vertexSize);
+    return INHERITED::preallocatedBufferSize() / vertexSize;
 }
 
 int GrVertexBufferAllocPool::currentBufferVertices(size_t vertexSize) const {
@@ -449,9 +449,9 @@ void* GrIndexBufferAllocPool::makeSpace(int indexCount,
                                         const GrIndexBuffer** buffer,
                                         int* startIndex) {
 
-    SkASSERT(indexCount >= 0);
-    SkASSERT(NULL != buffer);
-    SkASSERT(NULL != startIndex);
+    GrAssert(indexCount >= 0);
+    GrAssert(NULL != buffer);
+    GrAssert(NULL != startIndex);
 
     size_t offset = 0; // assign to suppress warning
     const GrGeometryBuffer* geomBuffer = NULL; // assign to suppress warning
@@ -461,8 +461,8 @@ void* GrIndexBufferAllocPool::makeSpace(int indexCount,
                                      &offset);
 
     *buffer = (const GrIndexBuffer*) geomBuffer;
-    SkASSERT(0 == offset % sizeof(uint16_t));
-    *startIndex = static_cast<int>(offset / sizeof(uint16_t));
+    GrAssert(0 == offset % sizeof(uint16_t));
+    *startIndex = offset / sizeof(uint16_t);
     return ptr;
 }
 
@@ -480,7 +480,7 @@ bool GrIndexBufferAllocPool::appendIndices(int indexCount,
 }
 
 int GrIndexBufferAllocPool::preallocatedBufferIndices() const {
-    return static_cast<int>(INHERITED::preallocatedBufferSize() / sizeof(uint16_t));
+    return INHERITED::preallocatedBufferSize() / sizeof(uint16_t);
 }
 
 int GrIndexBufferAllocPool::currentBufferIndices() const {

@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2010 Google Inc.
  *
@@ -5,14 +6,15 @@
  * found in the LICENSE file.
  */
 
+
+
 #ifndef GrPlotMgr_DEFINED
 #define GrPlotMgr_DEFINED
 
 #include "GrTypes.h"
 #include "GrPoint.h"
-#include "SkTypes.h"
 
-class GrPlotMgr : public SkNoncopyable {
+class GrPlotMgr : GrNoncopyable {
 public:
     GrPlotMgr(int width, int height) {
         fDim.set(width, height);
@@ -32,7 +34,7 @@ public:
     }
 
     void reset() {
-        sk_bzero(fBusy, fDim.fX * fDim.fY);
+        Gr_bzero(fBusy, fDim.fX * fDim.fY);
     }
 
     bool newPlot(GrIPoint16* loc) {
@@ -51,14 +53,14 @@ public:
     }
 
     bool isBusy(int x, int y) const {
-        SkASSERT((unsigned)x < (unsigned)fDim.fX);
-        SkASSERT((unsigned)y < (unsigned)fDim.fY);
+        GrAssert((unsigned)x < (unsigned)fDim.fX);
+        GrAssert((unsigned)y < (unsigned)fDim.fY);
         return fBusy[y * fDim.fX + x] != 0;
     }
 
     void freePlot(int x, int y) {
-        SkASSERT((unsigned)x < (unsigned)fDim.fX);
-        SkASSERT((unsigned)y < (unsigned)fDim.fY);
+        GrAssert((unsigned)x < (unsigned)fDim.fX);
+        GrAssert((unsigned)y < (unsigned)fDim.fY);
         fBusy[y * fDim.fX + x] = false;
     }
 

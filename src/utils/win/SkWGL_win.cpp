@@ -20,10 +20,10 @@ bool SkWGLExtensions::hasExtension(HDC dc, const char* ext) const {
         return true;
     }
     const char* extensionString = this->getExtensionsString(dc);
-    size_t extLength = strlen(ext);
+    int extLength = strlen(ext);
 
     while (true) {
-        size_t n = strcspn(extensionString, " ");
+        int n = strcspn(extensionString, " ");
         if (n == extLength && 0 == strncmp(ext, extensionString, n)) {
             return true;
         }
@@ -79,14 +79,19 @@ namespace {
 
 struct PixelFormat {
     int fFormat;
-    int fSampleCnt;
+    int fCoverageSamples;
+    int fColorSamples;
     int fChoosePixelFormatRank;
 };
 
 bool pf_less(const PixelFormat& a, const PixelFormat& b) {
-    if (a.fSampleCnt < b.fSampleCnt) {
+    if (a.fCoverageSamples < b.fCoverageSamples) {
         return true;
-    } else if (b.fSampleCnt < a.fSampleCnt) {
+    } else if (b.fCoverageSamples < a.fCoverageSamples) {
+        return false;
+    } else if (a.fColorSamples < b.fColorSamples) {
+        return true;
+    } else if (b.fColorSamples < a.fColorSamples) {
         return false;
     } else if (a.fChoosePixelFormatRank < b.fChoosePixelFormatRank) {
         return true;
@@ -103,20 +108,31 @@ int SkWGLExtensions::selectFormat(const int formats[],
         0,
         desiredSampleCount,
         0,
+        0,
     };
     SkTDArray<PixelFormat> rankedFormats;
     rankedFormats.setCount(formatCount);
+    bool supportsCoverage = this->hasExtension(dc,
+                                               "WGL_NV_multisample_coverage");
     for (int i = 0; i < formatCount; ++i) {
-        static const int kQueryAttr = SK_WGL_SAMPLES;
-        int numSamples;
+        static const int queryAttrs[] = {
+            SK_WGL_COVERAGE_SAMPLES,
+            // Keep COLOR_SAMPLES at the end so it can be skipped
+            SK_WGL_COLOR_SAMPLES,
+        };
+        int answers[2];
+        int queryAttrCnt = supportsCoverage ?
+                                    SK_ARRAY_COUNT(queryAttrs) :
+                                    SK_ARRAY_COUNT(queryAttrs) - 1;
         this->getPixelFormatAttribiv(dc,
                                      formats[i],
                                      0,
-                                     1,
-                                     &kQueryAttr,
-                                     &numSamples);
+                                     queryAttrCnt,
+                                     queryAttrs,
+                                     answers);
         rankedFormats[i].fFormat =  formats[i];
-        rankedFormats[i].fSampleCnt = numSamples;
+        rankedFormats[i].fCoverageSamples = answers[0];
+        rankedFormats[i].fColorSamples = answers[supportsCoverage ? 1 : 0];
         rankedFormats[i].fChoosePixelFormatRank = i;
     }
     SkTQSort(rankedFormats.begin(),
@@ -273,7 +289,7 @@ HGLRC SkCreateWGLContext(HDC dc, int msaaSampleCount, bool preferCoreProfile) {
     if (msaaSampleCount > 0 &&
         extensions.hasExtension(dc, "WGL_ARB_multisample")) {
         static const int kIAttrsCount = SK_ARRAY_COUNT(iAttrs);
-        int msaaIAttrs[kIAttrsCount + 4];
+        int msaaIAttrs[kIAttrsCount + 6];
         memcpy(msaaIAttrs, iAttrs, sizeof(int) * kIAttrsCount);
         SkASSERT(0 == msaaIAttrs[kIAttrsCount - 2] &&
                  0 == msaaIAttrs[kIAttrsCount - 1]);
@@ -281,8 +297,18 @@ HGLRC SkCreateWGLContext(HDC dc, int msaaSampleCount, bool preferCoreProfile) {
         msaaIAttrs[kIAttrsCount - 1] = TRUE;
         msaaIAttrs[kIAttrsCount + 0] = SK_WGL_SAMPLES;
         msaaIAttrs[kIAttrsCount + 1] = msaaSampleCount;
-        msaaIAttrs[kIAttrsCount + 2] = 0;
-        msaaIAttrs[kIAttrsCount + 3] = 0;
+        if (extensions.hasExtension(dc, "WGL_NV_multisample_coverage")) {
+            msaaIAttrs[kIAttrsCount + 2] = SK_WGL_COLOR_SAMPLES;
+            // We want the fewest number of color samples possible.
+            // Passing 0 gives only the formats where all samples are color
+            // samples.
+            msaaIAttrs[kIAttrsCount + 3] = 1;
+            msaaIAttrs[kIAttrsCount + 4] = 0;
+            msaaIAttrs[kIAttrsCount + 5] = 0;
+        } else {
+            msaaIAttrs[kIAttrsCount + 2] = 0;
+            msaaIAttrs[kIAttrsCount + 3] = 0;
+        }
         unsigned int num;
         int formats[64];
         extensions.choosePixelFormat(dc, msaaIAttrs, fAttrs, 64, formats, &num);

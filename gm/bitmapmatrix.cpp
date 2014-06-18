@@ -7,7 +7,6 @@
  */
 #include "gm.h"
 #include "SkBitmap.h"
-#include "SkBlurMask.h"
 #include "SkBlurMaskFilter.h"
 #include "SkCanvas.h"
 #include "SkColor.h"
@@ -81,11 +80,11 @@ protected:
             // SkGpuDevice::drawPath() -> SkGpuDevice::drawWithMaskFilter()
             SkPaint paint;
 
-            paint.setFilterLevel(SkPaint::kLow_FilterLevel);
+            paint.setFilterBitmap(true);
 
             SkMaskFilter* mf = SkBlurMaskFilter::Create(
+                5,
                 SkBlurMaskFilter::kNormal_BlurStyle,
-                SkBlurMask::ConvertRadiusToSigma(5),
                 SkBlurMaskFilter::kHighQuality_BlurFlag |
                 SkBlurMaskFilter::kIgnoreTransform_BlurFlag);
             paint.setMaskFilter(mf)->unref();

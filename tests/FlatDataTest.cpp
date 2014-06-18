@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2012 Google Inc.
  *
@@ -5,8 +6,6 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-#include "TestClassDef.h"
 #include "SkBitmap.h"
 #include "SkCanvas.h"
 #include "SkColor.h"
@@ -16,6 +15,7 @@
 #include "SkPictureFlat.h"
 #include "SkShader.h"
 #include "SkXfermode.h"
+#include "Test.h"
 
 static void flattenFlattenableProc(SkOrderedWriteBuffer& buffer,
                                    const void* obj) {
@@ -44,11 +44,13 @@ static void testCreate(skiatest::Reporter* reporter, const void* obj,
     // No need to delete data because that will be taken care of by the
     // controller.
     SkFlatData* data1 = SkFlatData::Create(&controller, obj, 0, flattenProc);
+    data1->setSentinelInCache();
     SkFlatData* data2 = SkFlatData::Create(&controller, obj, 1, flattenProc);
-    REPORTER_ASSERT(reporter, *data1 == *data2);
+    data2->setSentinelAsCandidate();
+    REPORTER_ASSERT(reporter, SkFlatData::Compare(*data1, *data2) == 0);
 }
 
-DEF_TEST(FlatData, reporter) {
+static void Tests(skiatest::Reporter* reporter) {
     // Test flattening SkShader
     SkPoint points[2];
     points[0].set(0, 0);
@@ -85,3 +87,5 @@ DEF_TEST(FlatData, reporter) {
     testCreate(reporter, xfer, &flattenFlattenableProc);
 }
 
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("FlatData", FlatDataClass, Tests)

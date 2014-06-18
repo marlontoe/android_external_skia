@@ -26,12 +26,12 @@ SkString* SkObjectParser::BitmapToString(const SkBitmap& bitmap) {
     mBitmap->appendS32(bitmap.height());
 
     const char* gConfigStrings[] = {
-        "None", "A8", "Index8", "RGB565", "ARGB4444", "ARGB8888"
+        "None", "A1", "A8", "Index8", "RGB565", "ARGB4444", "ARGB8888"
     };
-    SkASSERT(SkBitmap::kConfigCount == SK_ARRAY_COUNT(gConfigStrings));
+    SkASSERT(SkBitmap::kConfigCount == 7);
 
     mBitmap->append(" Config: ");
-    mBitmap->append(gConfigStrings[bitmap.config()]);
+    mBitmap->append(gConfigStrings[bitmap.getConfig()]);
 
     if (bitmap.isOpaque()) {
         mBitmap->append(" opaque");
@@ -335,12 +335,11 @@ SkString* SkObjectParser::TextToString(const void* text, size_t byteLength,
         }
         case SkPaint::kUTF16_TextEncoding: {
             decodedText->append("UTF-16: ");
-            size_t sizeNeeded = SkUTF16_ToUTF8((uint16_t*)text,
-                                                SkToS32(byteLength / 2),
-                                                NULL);
-            SkAutoSTMalloc<0x100, char> utf8(sizeNeeded);
-            SkUTF16_ToUTF8((uint16_t*)text, SkToS32(byteLength / 2), utf8);
+            size_t sizeNeeded = SkUTF16_ToUTF8((uint16_t*)text, byteLength / 2, NULL);
+            char* utf8 = new char[sizeNeeded];
+            SkUTF16_ToUTF8((uint16_t*)text, byteLength / 2, utf8);
             decodedText->append(utf8, sizeNeeded);
+            delete utf8;
             break;
         }
         case SkPaint::kUTF32_TextEncoding: {

@@ -11,11 +11,6 @@
   ],
 
   'target_defaults': {
-    'defines': [
-      'SK_GAMMA_SRGB',
-      'SK_GAMMA_APPLY_TO_A8',
-      'SK_SCALAR_TO_FLOAT_EXCLUDED',  # temporary to allow Chrome to call SkFloatToScalar
-    ],
 
     # Validate the 'skia_os' setting against 'OS', because only certain
     # combinations work.  You should only override 'skia_os' for certain
@@ -93,12 +88,14 @@
       'Debug': {
         'defines': [
           'SK_DEBUG',
+          'GR_DEBUG=1',
           'SK_DEVELOPER=1',
         ],
       },
       'Release': {
         'defines': [
           'SK_RELEASE',
+          'GR_RELEASE=1',
         ],
       },
       'Release_Developer': {
@@ -110,3 +107,8 @@
     },
   }, # end 'target_defaults'
 }
+# Local Variables:
+# tab-width:2
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=2 shiftwidth=2:

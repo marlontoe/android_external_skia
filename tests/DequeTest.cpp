@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkDeque.h"
 
 static void assert_count(skiatest::Reporter* reporter, const SkDeque& deq, int count) {
@@ -162,9 +161,11 @@ static void TestSub(skiatest::Reporter* reporter, int allocCount) {
     assert_blocks(reporter, deq, allocCount);
 }
 
-DEF_TEST(Deque, reporter) {
+static void TestDeque(skiatest::Reporter* reporter) {
     // test it once with the default allocation count
     TestSub(reporter, 1);
     // test it again with a generous allocation count
     TestSub(reporter, 10);
 }
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Deque", TestDequeClass, TestDeque)

@@ -103,7 +103,7 @@ bool SkDQuadImplicit::match(const SkDQuadImplicit& p2) const {
         if (first == index) {
             continue;
         }
-        if (!AlmostDequalUlps(fP[index] * p2.fP[first], fP[first] * p2.fP[index])) {
+        if (!AlmostEqualUlps(fP[index] * p2.fP[first], fP[first] * p2.fP[index])) {
             return false;
         }
     }

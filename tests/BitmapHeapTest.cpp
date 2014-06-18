@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2012 Google Inc.
  *
@@ -14,7 +15,6 @@
 #include "SkRefCnt.h"
 #include "SkShader.h"
 #include "Test.h"
-#include "TestClassDef.h"
 
 class FlatDictionary : public SkFlatDictionary<SkShader> {
 
@@ -37,7 +37,7 @@ public:
     }
 };
 
-DEF_TEST(BitmapHeap, reporter) {
+static void TestBitmapHeap(skiatest::Reporter* reporter) {
     // Create a bitmap shader.
     SkBitmap bm;
     bm.setConfig(SkBitmap::kARGB_8888_Config, 2, 2);
@@ -91,3 +91,6 @@ DEF_TEST(BitmapHeap, reporter) {
     REPORTER_ASSERT(reporter, heap.count() == 1);
     REPORTER_ASSERT(reporter, SkBitmapHeapTester::GetRefCount(heap.getEntry(0)) == 0);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("BitmapHeap", TestBitmapHeapClass, TestBitmapHeap)

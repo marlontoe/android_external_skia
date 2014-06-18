@@ -6,7 +6,6 @@
  * found in the LICENSE file.
  */
 #include "SkBlurDrawLooper.h"
-#include "SkBlurMask.h"     // just for SkBlurMask::ConvertRadiusToSigma
 #include "SkBlurMaskFilter.h"
 #include "SkCanvas.h"
 #include "SkColorFilter.h"
@@ -17,25 +16,11 @@
 #include "SkStringUtils.h"
 
 SkBlurDrawLooper::SkBlurDrawLooper(SkScalar radius, SkScalar dx, SkScalar dy,
-                                   SkColor color, uint32_t flags) {
-    this->init(SkBlurMask::ConvertRadiusToSigma(radius), dx, dy, color, flags);
-}
-
-SkBlurDrawLooper::SkBlurDrawLooper(SkColor color, SkScalar sigma,
-                                   SkScalar dx, SkScalar dy, uint32_t flags) {
-    this->init(sigma, dx, dy, color, flags);
-}
-
-void SkBlurDrawLooper::init(SkScalar sigma, SkScalar dx, SkScalar dy,
-                            SkColor color, uint32_t flags) {
-    fDx = dx;
-    fDy = dy;
-    fBlurColor = color;
-    fBlurFlags = flags;
-    fState = kDone;
+                                   SkColor color, uint32_t flags)
+    : fDx(dx), fDy(dy), fBlurColor(color), fBlurFlags(flags), fState(kDone) {
 
     SkASSERT(flags <= kAll_BlurFlag);
-    if (sigma > 0) {
+    if (radius > 0) {
         uint32_t blurFlags = flags & kIgnoreTransform_BlurFlag ?
             SkBlurMaskFilter::kIgnoreTransform_BlurFlag :
             SkBlurMaskFilter::kNone_BlurFlag;
@@ -44,8 +29,8 @@ void SkBlurDrawLooper::init(SkScalar sigma, SkScalar dx, SkScalar dy,
             SkBlurMaskFilter::kHighQuality_BlurFlag :
             SkBlurMaskFilter::kNone_BlurFlag;
 
-        fBlur = SkBlurMaskFilter::Create(SkBlurMaskFilter::kNormal_BlurStyle,
-                                         sigma,
+        fBlur = SkBlurMaskFilter::Create(radius,
+                                         SkBlurMaskFilter::kNormal_BlurStyle,
                                          blurFlags);
     } else {
         fBlur = NULL;
@@ -69,8 +54,8 @@ SkBlurDrawLooper::SkBlurDrawLooper(SkFlattenableReadBuffer& buffer)
     fDx = buffer.readScalar();
     fDy = buffer.readScalar();
     fBlurColor = buffer.readColor();
-    fBlur = buffer.readMaskFilter();
-    fColorFilter = buffer.readColorFilter();
+    fBlur = buffer.readFlattenableT<SkMaskFilter>();
+    fColorFilter = buffer.readFlattenableT<SkColorFilter>();
     fBlurFlags = buffer.readUInt() & kAll_BlurFlag;
 }
 

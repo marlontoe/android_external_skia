@@ -6,14 +6,13 @@
  */
 
 #include "gm.h"
-#include "SkBlurMask.h"
-#include "SkBlurMaskFilter.h"
 #include "SkFlattenableBuffers.h"
 #include "SkLayerRasterizer.h"
+#include "SkBlurMaskFilter.h"
 
 static void r0(SkLayerRasterizer* rast, SkPaint& p) {
-    p.setMaskFilter(SkBlurMaskFilter::Create(SkBlurMaskFilter::kNormal_BlurStyle,
-                              SkBlurMask::ConvertRadiusToSigma(SkIntToScalar(3))))->unref();
+    p.setMaskFilter(SkBlurMaskFilter::Create(SkIntToScalar(3),
+                                             SkBlurMaskFilter::kNormal_BlurStyle))->unref();
     rast->addLayer(p, SkIntToScalar(3), SkIntToScalar(3));
 
     p.setMaskFilter(NULL);
@@ -194,7 +193,7 @@ protected:
 
         SkString str("Hamburgefons");
 
-        for (int i = 0; i < static_cast<int>(SK_ARRAY_COUNT(gRastProcs)); i++) {
+        for (size_t i = 0; i < SK_ARRAY_COUNT(gRastProcs); i++) {
             apply_shader(&paint, i);
 
             //  paint.setMaskFilter(NULL);

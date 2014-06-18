@@ -5,9 +5,9 @@
  * found in the LICENSE file.
  */
 #include "SkBenchmark.h"
-#include "SkBitmapDevice.h"
 #include "SkBitmapSource.h"
 #include "SkCanvas.h"
+#include "SkDevice.h"
 #include "SkMergeImageFilter.h"
 
 #define FILTER_WIDTH_SMALL  SkIntToScalar(32)
@@ -17,7 +17,8 @@
 
 class MergeBench : public SkBenchmark {
 public:
-    MergeBench(bool small) : fIsSmall(small), fInitialized(false) { }
+    MergeBench(void* param, bool small) : INHERITED(param), fIsSmall(small), fInitialized(false) {
+    }
 
 protected:
     virtual const char* onGetName() SK_OVERRIDE {
@@ -32,14 +33,12 @@ protected:
         }
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkRect r = fIsSmall ? SkRect::MakeWH(FILTER_WIDTH_SMALL, FILTER_HEIGHT_SMALL) :
                               SkRect::MakeWH(FILTER_WIDTH_LARGE, FILTER_HEIGHT_LARGE);
         SkPaint paint;
         paint.setImageFilter(mergeBitmaps())->unref();
-        for (int i = 0; i < loops; i++) {
-            canvas->drawRect(r, paint);
-        }
+        canvas->drawRect(r, paint);
     }
 
 private:
@@ -54,7 +53,7 @@ private:
     void make_bitmap() {
         fBitmap.setConfig(SkBitmap::kARGB_8888_Config, 80, 80);
         fBitmap.allocPixels();
-        SkBitmapDevice device(fBitmap);
+        SkDevice device(fBitmap);
         SkCanvas canvas(&device);
         canvas.clear(0x00000000);
         SkPaint paint;
@@ -68,7 +67,7 @@ private:
     void make_checkerboard() {
         fCheckerboard.setConfig(SkBitmap::kARGB_8888_Config, 80, 80);
         fCheckerboard.allocPixels();
-        SkBitmapDevice device(fCheckerboard);
+        SkDevice device(fCheckerboard);
         SkCanvas canvas(&device);
         canvas.clear(0x00000000);
         SkPaint darkPaint;
@@ -97,5 +96,5 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new MergeBench(true); )
-DEF_BENCH( return new MergeBench(false); )
+DEF_BENCH( return new MergeBench(p, true); )
+DEF_BENCH( return new MergeBench(p, false); )

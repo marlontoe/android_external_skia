@@ -21,7 +21,7 @@ void PathOpsThreadedTestRunner::render() {
         pool.add(fRunnables[index]);
     }
 #ifdef SK_DEBUG
-    SkPathOpsDebug::gMaxWindSum = SK_MaxS32;
-    SkPathOpsDebug::gMaxWindValue = SK_MaxS32;
+    gDebugMaxWindSum = SK_MaxS32;
+    gDebugMaxWindValue = SK_MaxS32;
 #endif
 }

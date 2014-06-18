@@ -8,6 +8,8 @@
 #include "SkFlattenable.h"
 #include "SkPtrRecorder.h"
 
+SK_DEFINE_INST_COUNT(SkFlattenable)
+
 ///////////////////////////////////////////////////////////////////////////////
 
 void SkFlattenable::flatten(SkFlattenableWriteBuffer&) const
@@ -61,84 +63,64 @@ void SkRefCntSet::decPtr(void* ptr) {
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-#define MAX_ENTRY_COUNT  1024
+#define MAX_PAIR_COUNT  1024
 
-struct Entry {
+struct Pair {
     const char*             fName;
     SkFlattenable::Factory  fFactory;
-    SkFlattenable::Type     fType;
 };
 
 static int gCount;
-static Entry gEntries[MAX_ENTRY_COUNT];
+static Pair gPairs[MAX_PAIR_COUNT];
 
-void SkFlattenable::Register(const char name[], Factory factory, SkFlattenable::Type type) {
+void SkFlattenable::Register(const char name[], Factory factory) {
     SkASSERT(name);
     SkASSERT(factory);
 
-    static bool gOnce = false;
+    static bool gOnce;
     if (!gOnce) {
         gCount = 0;
         gOnce = true;
     }
 
-    SkASSERT(gCount < MAX_ENTRY_COUNT);
+    SkASSERT(gCount < MAX_PAIR_COUNT);
 
-    gEntries[gCount].fName = name;
-    gEntries[gCount].fFactory = factory;
-    gEntries[gCount].fType = type;
+    gPairs[gCount].fName = name;
+    gPairs[gCount].fFactory = factory;
     gCount += 1;
 }
 
 #ifdef SK_DEBUG
 static void report_no_entries(const char* functionName) {
     if (!gCount) {
-        SkDebugf("%s has no registered name/factory/type entries."
-                 " Call SkFlattenable::InitializeFlattenablesIfNeeded() before using gEntries",
+        SkDebugf("%s has no registered name/factory pairs."
+                 " Call SkGraphics::Init() at process initialization time.",
                  functionName);
     }
 }
 #endif
 
 SkFlattenable::Factory SkFlattenable::NameToFactory(const char name[]) {
-    InitializeFlattenablesIfNeeded();
 #ifdef SK_DEBUG
     report_no_entries(__FUNCTION__);
 #endif
-    const Entry* entries = gEntries;
+    const Pair* pairs = gPairs;
     for (int i = gCount - 1; i >= 0; --i) {
-        if (strcmp(entries[i].fName, name) == 0) {
-            return entries[i].fFactory;
+        if (strcmp(pairs[i].fName, name) == 0) {
+            return pairs[i].fFactory;
         }
     }
     return NULL;
 }
 
-bool SkFlattenable::NameToType(const char name[], SkFlattenable::Type* type) {
-    SkASSERT(NULL != type);
-    InitializeFlattenablesIfNeeded();
-#ifdef SK_DEBUG
-    report_no_entries(__FUNCTION__);
-#endif
-    const Entry* entries = gEntries;
-    for (int i = gCount - 1; i >= 0; --i) {
-        if (strcmp(entries[i].fName, name) == 0) {
-            *type = entries[i].fType;
-            return true;
-        }
-    }
-    return false;
-}
-
 const char* SkFlattenable::FactoryToName(Factory fact) {
-    InitializeFlattenablesIfNeeded();
 #ifdef SK_DEBUG
     report_no_entries(__FUNCTION__);
 #endif
-    const Entry* entries = gEntries;
+    const Pair* pairs = gPairs;
     for (int i = gCount - 1; i >= 0; --i) {
-        if (entries[i].fFactory == fact) {
-            return entries[i].fName;
+        if (pairs[i].fFactory == fact) {
+            return pairs[i].fName;
         }
     }
     return NULL;

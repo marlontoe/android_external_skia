@@ -22,8 +22,8 @@ SkFilterShader::SkFilterShader(SkShader* shader, SkColorFilter* filter) {
 
 SkFilterShader::SkFilterShader(SkFlattenableReadBuffer& buffer)
     : INHERITED(buffer) {
-    fShader = buffer.readShader();
-    fFilter = buffer.readColorFilter();
+    fShader = buffer.readFlattenableT<SkShader>();
+    fFilter = buffer.readFlattenableT<SkColorFilter>();
 }
 
 SkFilterShader::~SkFilterShader() {

@@ -6,7 +6,6 @@
  */
 
 #include "Test.h"
-#include "TestClassDef.h"
 // This is a GPU-backend specific test
 #if SK_SUPPORT_GPU
 #include "GrMemoryPool.h"
@@ -15,6 +14,7 @@
 #include "SkTemplates.h"
 #include "SkInstCnt.h"
 
+namespace {
 // A is the top of an inheritance tree of classes that overload op new and
 // and delete to use a GrMemoryPool. The objects have values of different types
 // that can be set and checked.
@@ -47,7 +47,7 @@ public:
 
     SK_DECLARE_INST_COUNT_ROOT(A);
 
-    static A* Create(SkRandom* r);
+    static A* Create(SkMWCRandom* r);
 
     static void SetAllocator(size_t preallocSize, size_t minAllocSize) {
 #if SK_ENABLE_INST_COUNT
@@ -68,7 +68,7 @@ private:
     static SkAutoTDelete<GrMemoryPool> gPool;
     char fChar;
 };
-
+SK_DEFINE_INST_COUNT(A);
 SkAutoTDelete<GrMemoryPool> A::gPool;
 
 class B : public A {
@@ -160,7 +160,7 @@ private:
     typedef A INHERITED;
 };
 
-A* A::Create(SkRandom* r) {
+A* A::Create(SkMWCRandom* r) {
     switch (r->nextRangeU(0, 4)) {
         case 0:
             return new A;
@@ -177,13 +177,13 @@ A* A::Create(SkRandom* r) {
             return NULL;
     }
 }
-
+}
 struct Rec {
     A* fInstance;
     int fValue;
 };
 
-DEF_TEST(GrMemoryPool, reporter) {
+static void test_memory_pool(skiatest::Reporter* reporter) {
     // prealloc and min alloc sizes for the pool
     static const size_t gSizes[][2] = {
         {0, 0},
@@ -201,7 +201,7 @@ DEF_TEST(GrMemoryPool, reporter) {
     // number of iterations
     static const int kCheckPeriod = 500;
 
-    SkRandom r;
+    SkMWCRandom r;
     for (size_t s = 0; s < SK_ARRAY_COUNT(gSizes); ++s) {
         A::SetAllocator(gSizes[s][0], gSizes[s][1]);
         for (size_t c = 0; c < SK_ARRAY_COUNT(gCreateFraction); ++c) {
@@ -239,5 +239,8 @@ DEF_TEST(GrMemoryPool, reporter) {
         }
     }
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("GrMemoryPool", GrMemoryPoolClass, test_memory_pool)
 
 #endif

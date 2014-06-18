@@ -14,7 +14,7 @@ class GrContext;
 #endif
 
 static void make_bitmap(SkBitmap* bitmap, GrContext* ctx, SkIRect* center) {
-    SkBaseDevice* dev;
+    SkDevice* dev;
 
     const int kFixed = 28;
     const int kStretchy = 8;
@@ -29,7 +29,7 @@ static void make_bitmap(SkBitmap* bitmap, GrContext* ctx, SkIRect* center) {
     {
         bitmap->setConfig(SkBitmap::kARGB_8888_Config, kSize, kSize);
         bitmap->allocPixels();
-        dev = new SkBitmapDevice(*bitmap);
+        dev = new SkDevice(*bitmap);
     }
 
     SkCanvas canvas(dev);
@@ -93,7 +93,7 @@ protected:
         SkScalar y = SkIntToScalar(100);
 
         SkPaint paint;
-        paint.setFilterLevel(SkPaint::kLow_FilterLevel);
+        paint.setFilterBitmap(true);
 
         for (int iy = 0; iy < 2; ++iy) {
             for (int ix = 0; ix < 2; ++ix) {

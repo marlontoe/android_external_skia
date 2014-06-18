@@ -11,14 +11,13 @@
 #define SkImageDecoder_DEFINED
 
 #include "SkBitmap.h"
+#include "SkBitmapFactory.h"
 #include "SkImage.h"
 #include "SkRect.h"
 #include "SkRefCnt.h"
-#include "SkTRegistry.h"
 #include "SkTypes.h"
 
 class SkStream;
-class SkStreamRewindable;
 
 /** \class SkImageDecoder
 
@@ -46,10 +45,10 @@ public:
     */
     virtual Format getFormat() const;
 
-    /** Return the format of the SkStreamRewindable or kUnknown_Format if it cannot be determined.
-        Rewinds the stream before returning.
+    /** Return the format of the SkStream or kUnknown_Format if it cannot be determined. Rewinds the
+        stream before returning.
     */
-    static Format GetStreamFormat(SkStreamRewindable*);
+    static Format GetStreamFormat(SkStream*);
 
     /** Return a readable string of the Format provided.
     */
@@ -156,6 +155,36 @@ public:
 
     Chooser* getChooser() const { return fChooser; }
     Chooser* setChooser(Chooser*);
+
+    /**
+        @Deprecated. Use the struct version instead.
+
+        This optional table describes the caller's preferred config based on
+        information about the src data. For this table, the src attributes are
+        described in terms of depth (index (8), 16, 32/24) and if there is
+        per-pixel alpha. These inputs combine to create an index into the
+        pref[] table, which contains the caller's preferred config for that
+        input, or kNo_Config if there is no preference.
+
+        To specify no preference, call setPrefConfigTable(NULL), which is
+        the default.
+
+        Note, it is still at the discretion of the codec as to what output
+        config is actually returned, as it may not be able to support the
+        caller's preference.
+
+        Here is how the index into the table is computed from the src:
+            depth [8, 16, 32/24] -> 0, 2, 4
+            alpha [no, yes] -> 0, 1
+        The two index values are OR'd together.
+            src: 8-index, no-alpha  -> 0
+            src: 8-index, yes-alpha -> 1
+            src: 16bit,   no-alpha  -> 2    // e.g. 565
+            src: 16bit,   yes-alpha -> 3    // e.g. 1555
+            src: 32/24,   no-alpha  -> 4
+            src: 32/24,   yes-alpha -> 5
+     */
+    void setPrefConfigTable(const SkBitmap::Config pref[6]);
 
     /**
      *  Optional table describing the caller's preferred config based on
@@ -277,7 +306,7 @@ public:
      *
      * Return true for success or false on failure.
      */
-    bool buildTileIndex(SkStreamRewindable*, int *width, int *height);
+    bool buildTileIndex(SkStream*, int *width, int *height);
 
     /**
      * Decode a rectangle subset in the image.
@@ -299,7 +328,7 @@ public:
     /** Given a stream, this will try to find an appropriate decoder object.
         If none is found, the method returns NULL.
     */
-    static SkImageDecoder* Factory(SkStreamRewindable*);
+    static SkImageDecoder* Factory(SkStream*);
 
     /** Decode the image stored in the specified file, and store the result
         in bitmap. Return true for success or false on failure.
@@ -335,21 +364,33 @@ public:
     }
 
     /**
-     *  Struct containing information about a pixel destination.
+     *  Decode memory.
+     *  @param info Output parameter. Returns info about the encoded image.
+     *  @param target Contains the address of pixel memory to decode into
+     *         (which must be large enough to hold the width in info) and
+     *         the row bytes to use. If NULL, returns info and does not
+     *         decode pixels.
+     *  @return bool Whether the function succeeded.
+     *
+     *  Sample usage:
+     *  <code>
+     *      // Determine the image's info: width/height/config
+     *      SkImage::Info info;
+     *      bool success = DecodeMemoryToTarget(src, size, &info, NULL);
+     *      if (!success) return;
+     *      // Allocate space for the result:
+     *      SkBitmapFactory::Target target;
+     *      target.fAddr = malloc/other allocation
+     *      target.fRowBytes = ...
+     *      // Now decode the actual pixels into target. &info is optional,
+     *      // and could be NULL
+     *      success = DecodeMemoryToTarget(src, size, &info, &target);
+     *  </code>
      */
-    struct Target {
-        /**
-         *  Pre-allocated memory.
-         */
-        void*  fAddr;
+    static bool DecodeMemoryToTarget(const void* buffer, size_t size, SkImage::Info* info,
+                                     const SkBitmapFactory::Target* target);
 
-        /**
-         *  Rowbytes of the allocated memory.
-         */
-        size_t fRowBytes;
-    };
-
-    /** Decode the image stored in the specified SkStreamRewindable, and store the result
+    /** Decode the image stored in the specified SkStream, and store the result
         in bitmap. Return true for success or false on failure.
 
         @param prefConfig If the PrefConfigTable is not set, prefer this config.
@@ -358,10 +399,10 @@ public:
         @param format On success, if format is non-null, it is set to the format
                       of the decoded stream. On failure it is ignored.
      */
-    static bool DecodeStream(SkStreamRewindable* stream, SkBitmap* bitmap,
+    static bool DecodeStream(SkStream* stream, SkBitmap* bitmap,
                              SkBitmap::Config prefConfig, Mode,
                              Format* format = NULL);
-    static bool DecodeStream(SkStreamRewindable* stream, SkBitmap* bitmap) {
+    static bool DecodeStream(SkStream* stream, SkBitmap* bitmap) {
         return DecodeStream(stream, bitmap, SkBitmap::kNo_Config,
                             kDecodePixels_Mode, NULL);
     }
@@ -386,7 +427,7 @@ protected:
 
     // If the decoder wants to support tiled based decoding,
     // this method must be overridden. This guy is called by buildTileIndex(...)
-    virtual bool onBuildTileIndex(SkStreamRewindable*, int *width, int *height) {
+    virtual bool onBuildTileIndex(SkStream*, int *width, int *height) {
         return false;
     }
 
@@ -498,7 +539,7 @@ class SkImageDecoderFactory : public SkRefCnt {
 public:
     SK_DECLARE_INST_COUNT(SkImageDecoderFactory)
 
-    virtual SkImageDecoder* newDecoder(SkStreamRewindable*) = 0;
+    virtual SkImageDecoder* newDecoder(SkStream*) = 0;
 
 private:
     typedef SkRefCnt INHERITED;
@@ -507,7 +548,7 @@ private:
 class SkDefaultImageDecoderFactory : SkImageDecoderFactory {
 public:
     // calls SkImageDecoder::Factory(stream)
-    virtual SkImageDecoder* newDecoder(SkStreamRewindable* stream) {
+    virtual SkImageDecoder* newDecoder(SkStream* stream) {
         return SkImageDecoder::Factory(stream);
     }
 };
@@ -533,11 +574,5 @@ DECLARE_DECODER_CREATOR(JPEGImageDecoder);
 DECLARE_DECODER_CREATOR(PNGImageDecoder);
 DECLARE_DECODER_CREATOR(WBMPImageDecoder);
 DECLARE_DECODER_CREATOR(WEBPImageDecoder);
-
-
-// Typedefs to make registering decoder and formatter callbacks easier.
-// These have to be defined outside SkImageDecoder. :(
-typedef SkTRegistry<SkImageDecoder*(*)(SkStreamRewindable*)>        SkImageDecoder_DecodeReg;
-typedef SkTRegistry<SkImageDecoder::Format(*)(SkStreamRewindable*)> SkImageDecoder_FormatReg;
 
 #endif

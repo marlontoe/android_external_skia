@@ -23,7 +23,7 @@
 #include "SkTSet.h"
 #include "SkTypes.h"
 
-static bool inverseTransformBBox(const SkMatrix& matrix, SkRect* bbox) {
+static bool transformBBox(const SkMatrix& matrix, SkRect* bbox) {
     SkMatrix inverse;
     if (!matrix.invert(&inverse)) {
         return false;
@@ -54,7 +54,6 @@ static void unitToPointsMatrix(const SkPoint pts[2], SkMatrix* matrix) {
  */
 static void interpolateColorCode(SkScalar range, SkScalar* curColor,
                                  SkScalar* prevColor, SkString* result) {
-    SkASSERT(range != SkIntToScalar(0));
     static const int kColorComponents = 3;
 
     // Figure out how to scale each color component.
@@ -152,13 +151,7 @@ static void gradientFunctionCode(const SkShader::GradientInfo& info,
     result->append(" }\n");
 
     // The gradient colors.
-    int gradients = 0;
     for (int i = 1 ; i < info.fColorCount; i++) {
-        if (info.fColorOffsets[i] == info.fColorOffsets[i - 1]) {
-            continue;
-        }
-        gradients++;
-
         result->append("{dup ");
         result->appendScalar(info.fColorOffsets[i]);
         result->append(" le {");
@@ -180,7 +173,7 @@ static void gradientFunctionCode(const SkShader::GradientInfo& info,
     result->append(" ");
     result->appendScalar(colorData[info.fColorCount - 1][2]);
 
-    for (int i = 0 ; i < gradients + 1; i++) {
+    for (int i = 0 ; i < info.fColorCount; i++) {
         result->append("} ifelse\n");
     }
 }
@@ -499,7 +492,6 @@ private:
 };
 
 class SkPDFFunctionShader : public SkPDFDict, public SkPDFShader {
-    SK_DECLARE_INST_COUNT(SkPDFFunctionShader)
 public:
     explicit SkPDFFunctionShader(SkPDFShader::State* state);
     virtual ~SkPDFFunctionShader() {
@@ -525,7 +517,6 @@ private:
     SkAutoTDelete<const SkPDFShader::State> fState;
 
     SkPDFStream* makePSFunction(const SkString& psCode, SkPDFArray* domain);
-    typedef SkPDFDict INHERITED;
 };
 
 /**
@@ -907,7 +898,7 @@ SkPDFFunctionShader::SkPDFFunctionShader(SkPDFShader::State* state)
 
     SkRect bbox;
     bbox.set(fState.get()->fBBox);
-    if (!inverseTransformBBox(finalMatrix, &bbox)) {
+    if (!transformBBox(finalMatrix, &bbox)) {
         return;
     }
 
@@ -955,62 +946,34 @@ SkPDFFunctionShader::SkPDFFunctionShader(SkPDFShader::State* state)
 SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
     fState.get()->fImage.lockPixels();
 
-    // The image shader pattern cell will be drawn into a separate device
-    // in pattern cell space (no scaling on the bitmap, though there may be
-    // translations so that all content is in the device, coordinates > 0).
-
-    // Map clip bounds to shader space to ensure the device is large enough
-    // to handle fake clamping.
     SkMatrix finalMatrix = fState.get()->fCanvasTransform;
     finalMatrix.preConcat(fState.get()->fShaderTransform);
-    SkRect deviceBounds;
-    deviceBounds.set(fState.get()->fBBox);
-    if (!inverseTransformBBox(finalMatrix, &deviceBounds)) {
+    SkRect surfaceBBox;
+    surfaceBBox.set(fState.get()->fBBox);
+    if (!transformBBox(finalMatrix, &surfaceBBox)) {
         return;
     }
 
-    const SkBitmap* image = &fState.get()->fImage;
-    SkRect bitmapBounds;
-    image->getBounds(&bitmapBounds);
+    SkMatrix unflip;
+    unflip.setTranslate(0, SkScalarRoundToScalar(surfaceBBox.height()));
+    unflip.preScale(SK_Scalar1, -SK_Scalar1);
+    SkISize size = SkISize::Make(SkScalarRound(surfaceBBox.width()),
+                                 SkScalarRound(surfaceBBox.height()));
+    SkPDFDevice pattern(size, size, unflip);
+    SkCanvas canvas(&pattern);
+    canvas.translate(-surfaceBBox.fLeft, -surfaceBBox.fTop);
+    finalMatrix.preTranslate(surfaceBBox.fLeft, surfaceBBox.fTop);
 
-    // For tiling modes, the bounds should be extended to include the bitmap,
-    // otherwise the bitmap gets clipped out and the shader is empty and awful.
-    // For clamp modes, we're only interested in the clip region, whether
-    // or not the main bitmap is in it.
+    const SkBitmap* image = &fState.get()->fImage;
+    SkScalar width = SkIntToScalar(image->width());
+    SkScalar height = SkIntToScalar(image->height());
     SkShader::TileMode tileModes[2];
     tileModes[0] = fState.get()->fImageTileModes[0];
     tileModes[1] = fState.get()->fImageTileModes[1];
-    if (tileModes[0] != SkShader::kClamp_TileMode ||
-            tileModes[1] != SkShader::kClamp_TileMode) {
-        deviceBounds.join(bitmapBounds);
-    }
 
-    SkMatrix unflip;
-    unflip.setTranslate(0, SkScalarRoundToScalar(deviceBounds.height()));
-    unflip.preScale(SK_Scalar1, -SK_Scalar1);
-    SkISize size = SkISize::Make(SkScalarRound(deviceBounds.width()),
-                                 SkScalarRound(deviceBounds.height()));
-    // TODO(edisonn): should we pass here the DCT encoder of the destination device?
-    // TODO(edisonn): NYI Perspective, use SkPDFDeviceFlattener.
-    SkPDFDevice pattern(size, size, unflip);
-    SkCanvas canvas(&pattern);
-
-    SkRect patternBBox;
-    image->getBounds(&patternBBox);
-
-    // Translate the canvas so that the bitmap origin is at (0, 0).
-    canvas.translate(-deviceBounds.left(), -deviceBounds.top());
-    patternBBox.offset(-deviceBounds.left(), -deviceBounds.top());
-    // Undo the translation in the final matrix
-    finalMatrix.preTranslate(deviceBounds.left(), deviceBounds.top());
-
-    // If the bitmap is out of bounds (i.e. clamp mode where we only see the
-    // stretched sides), canvas will clip this out and the extraneous data
-    // won't be saved to the PDF.
     canvas.drawBitmap(*image, 0, 0);
-
-    SkScalar width = SkIntToScalar(image->width());
-    SkScalar height = SkIntToScalar(image->height());
+    SkRect patternBBox = SkRect::MakeXYWH(-surfaceBBox.fLeft, -surfaceBBox.fTop,
+                                          width, height);
 
     // Tiling is implied.  First we handle mirroring.
     if (tileModes[0] == SkShader::kMirror_TileMode) {
@@ -1044,29 +1007,28 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
             tileModes[1] == SkShader::kClamp_TileMode) {
         SkPaint paint;
         SkRect rect;
-        rect = SkRect::MakeLTRB(deviceBounds.left(), deviceBounds.top(), 0, 0);
+        rect = SkRect::MakeLTRB(surfaceBBox.fLeft, surfaceBBox.fTop, 0, 0);
         if (!rect.isEmpty()) {
             paint.setColor(image->getColor(0, 0));
             canvas.drawRect(rect, paint);
         }
 
-        rect = SkRect::MakeLTRB(width, deviceBounds.top(),
-                                deviceBounds.right(), 0);
+        rect = SkRect::MakeLTRB(width, surfaceBBox.fTop, surfaceBBox.fRight, 0);
         if (!rect.isEmpty()) {
             paint.setColor(image->getColor(image->width() - 1, 0));
             canvas.drawRect(rect, paint);
         }
 
-        rect = SkRect::MakeLTRB(width, height,
-                                deviceBounds.right(), deviceBounds.bottom());
+        rect = SkRect::MakeLTRB(width, height, surfaceBBox.fRight,
+                                surfaceBBox.fBottom);
         if (!rect.isEmpty()) {
             paint.setColor(image->getColor(image->width() - 1,
                                            image->height() - 1));
             canvas.drawRect(rect, paint);
         }
 
-        rect = SkRect::MakeLTRB(deviceBounds.left(), height,
-                                0, deviceBounds.bottom());
+        rect = SkRect::MakeLTRB(surfaceBBox.fLeft, height, 0,
+                                surfaceBBox.fBottom);
         if (!rect.isEmpty()) {
             paint.setColor(image->getColor(0, image->height() - 1));
             canvas.drawRect(rect, paint);
@@ -1076,13 +1038,13 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
     // Then expand the left, right, top, then bottom.
     if (tileModes[0] == SkShader::kClamp_TileMode) {
         SkIRect subset = SkIRect::MakeXYWH(0, 0, 1, image->height());
-        if (deviceBounds.left() < 0) {
+        if (surfaceBBox.fLeft < 0) {
             SkBitmap left;
             SkAssertResult(image->extractSubset(&left, subset));
 
             SkMatrix leftMatrix;
-            leftMatrix.setScale(-deviceBounds.left(), 1);
-            leftMatrix.postTranslate(deviceBounds.left(), 0);
+            leftMatrix.setScale(-surfaceBBox.fLeft, 1);
+            leftMatrix.postTranslate(surfaceBBox.fLeft, 0);
             canvas.drawBitmapMatrix(left, leftMatrix);
 
             if (tileModes[1] == SkShader::kMirror_TileMode) {
@@ -1093,13 +1055,13 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
             patternBBox.fLeft = 0;
         }
 
-        if (deviceBounds.right() > width) {
+        if (surfaceBBox.fRight > width) {
             SkBitmap right;
             subset.offset(image->width() - 1, 0);
             SkAssertResult(image->extractSubset(&right, subset));
 
             SkMatrix rightMatrix;
-            rightMatrix.setScale(deviceBounds.right() - width, 1);
+            rightMatrix.setScale(surfaceBBox.fRight - width, 1);
             rightMatrix.postTranslate(width, 0);
             canvas.drawBitmapMatrix(right, rightMatrix);
 
@@ -1108,19 +1070,19 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
                 rightMatrix.postTranslate(0, 2 * height);
                 canvas.drawBitmapMatrix(right, rightMatrix);
             }
-            patternBBox.fRight = deviceBounds.width();
+            patternBBox.fRight = surfaceBBox.width();
         }
     }
 
     if (tileModes[1] == SkShader::kClamp_TileMode) {
         SkIRect subset = SkIRect::MakeXYWH(0, 0, image->width(), 1);
-        if (deviceBounds.top() < 0) {
+        if (surfaceBBox.fTop < 0) {
             SkBitmap top;
             SkAssertResult(image->extractSubset(&top, subset));
 
             SkMatrix topMatrix;
-            topMatrix.setScale(SK_Scalar1, -deviceBounds.top());
-            topMatrix.postTranslate(0, deviceBounds.top());
+            topMatrix.setScale(SK_Scalar1, -surfaceBBox.fTop);
+            topMatrix.postTranslate(0, surfaceBBox.fTop);
             canvas.drawBitmapMatrix(top, topMatrix);
 
             if (tileModes[0] == SkShader::kMirror_TileMode) {
@@ -1131,13 +1093,13 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
             patternBBox.fTop = 0;
         }
 
-        if (deviceBounds.bottom() > height) {
+        if (surfaceBBox.fBottom > height) {
             SkBitmap bottom;
             subset.offset(0, image->height() - 1);
             SkAssertResult(image->extractSubset(&bottom, subset));
 
             SkMatrix bottomMatrix;
-            bottomMatrix.setScale(SK_Scalar1, deviceBounds.bottom() - height);
+            bottomMatrix.setScale(SK_Scalar1, surfaceBBox.fBottom - height);
             bottomMatrix.postTranslate(0, height);
             canvas.drawBitmapMatrix(bottom, bottomMatrix);
 
@@ -1146,7 +1108,7 @@ SkPDFImageShader::SkPDFImageShader(SkPDFShader::State* state) : fState(state) {
                 bottomMatrix.postTranslate(2 * width, 0);
                 canvas.drawBitmapMatrix(bottom, bottomMatrix);
             }
-            patternBBox.fBottom = deviceBounds.height();
+            patternBBox.fBottom = surfaceBBox.height();
         }
     }
 

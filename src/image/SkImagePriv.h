@@ -13,10 +13,15 @@
 
 class SkPicture;
 
-extern SkBitmap::Config SkImageInfoToBitmapConfig(const SkImageInfo&);
+extern SkBitmap::Config SkImageInfoToBitmapConfig(const SkImage::Info&,
+                                                  bool* isOpaque);
+
+extern int SkImageBytesPerPixel(SkImage::ColorType);
+
+extern bool SkBitmapToImageInfo(const SkBitmap&, SkImage::Info*);
 
 // Call this if you explicitly want to use/share this pixelRef in the image
-extern SkImage* SkNewImageFromPixelRef(const SkImageInfo&, SkPixelRef*,
+extern SkImage* SkNewImageFromPixelRef(const SkImage::Info&, SkPixelRef*,
                                        size_t rowBytes);
 
 /**
@@ -26,7 +31,7 @@ extern SkImage* SkNewImageFromPixelRef(const SkImageInfo&, SkPixelRef*,
  *  is true.
  *
  *  If the bitmap's config cannot be converted into a corresponding
- *  SkImageInfo, or the bitmap's pixels cannot be accessed, this will return
+ *  SkImage::Info, or the bitmap's pixels cannot be accessed, this will return
  *  NULL.
  */
 extern SkImage* SkNewImageFromBitmap(const SkBitmap&, bool canSharePixelRef);
@@ -43,8 +48,9 @@ extern void SkImagePrivDrawPicture(SkCanvas*, SkPicture*,
  */
 extern SkImage* SkNewImageFromPicture(const SkPicture*);
 
-static inline size_t SkImageMinRowBytes(const SkImageInfo& info) {
-    return SkAlign4(info.minRowBytes());
+static inline size_t SkImageMinRowBytes(const SkImage::Info& info) {
+    size_t rb = info.fWidth * SkImageBytesPerPixel(info.fColorType);
+    return SkAlign4(rb);
 }
 
 // Given an image created from SkNewImageFromBitmap, return its pixelref. This

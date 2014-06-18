@@ -183,7 +183,6 @@ bool SkRegion::op(const SkRegion& rgn, const SkIRect& rect, Op op) {
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifdef SK_BUILD_FOR_ANDROID
-#include <stdio.h>
 char* SkRegion::toString() {
     Iterator iter(*this);
     int count = 0;
@@ -1100,9 +1099,9 @@ bool SkRegion::op(const SkRegion& rgna, const SkRegion& rgnb, Op op) {
 
 #include "SkBuffer.h"
 
-size_t SkRegion::writeToMemory(void* storage) const {
+uint32_t SkRegion::writeToMemory(void* storage) const {
     if (NULL == storage) {
-        size_t size = sizeof(int32_t); // -1 (empty), 0 (rect), runCount
+        uint32_t size = sizeof(int32_t); // -1 (empty), 0 (rect), runCount
         if (!this->isEmpty()) {
             size += sizeof(fBounds);
             if (this->isComplex()) {
@@ -1133,28 +1132,25 @@ size_t SkRegion::writeToMemory(void* storage) const {
     return buffer.pos();
 }
 
-size_t SkRegion::readFromMemory(const void* storage, size_t length) {
-    SkRBufferWithSizeCheck  buffer(storage, length);
-    SkRegion                tmp;
-    int32_t                 count;
+uint32_t SkRegion::readFromMemory(const void* storage) {
+    SkRBuffer   buffer(storage);
+    SkRegion    tmp;
+    int32_t     count;
 
-    if (buffer.readS32(&count) && (count >= 0) && buffer.read(&tmp.fBounds, sizeof(tmp.fBounds))) {
+    count = buffer.readS32();
+    if (count >= 0) {
+        buffer.read(&tmp.fBounds, sizeof(tmp.fBounds));
         if (count == 0) {
             tmp.fRunHead = SkRegion_gRectRunHeadPtr;
         } else {
-            int32_t ySpanCount, intervalCount;
-            if (buffer.readS32(&ySpanCount) && buffer.readS32(&intervalCount)) {
-                tmp.allocateRuns(count, ySpanCount, intervalCount);
-                buffer.read(tmp.fRunHead->writable_runs(), count * sizeof(RunType));
-            }
+            int32_t ySpanCount = buffer.readS32();
+            int32_t intervalCount = buffer.readS32();
+            tmp.allocateRuns(count, ySpanCount, intervalCount);
+            buffer.read(tmp.fRunHead->writable_runs(), count * sizeof(RunType));
         }
     }
-    size_t sizeRead = 0;
-    if (buffer.isValid()) {
-        this->swap(tmp);
-        sizeRead = buffer.pos();
-    }
-    return sizeRead;
+    this->swap(tmp);
+    return buffer.pos();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

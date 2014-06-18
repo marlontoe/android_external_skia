@@ -49,19 +49,10 @@ static SkOpSegment* findChaseOp(SkTDArray<SkOpSpan*>& chase, int& nextStart, int
         // find first angle, initialize winding to computed fWindSum
         int firstIndex = -1;
         const SkOpAngle* angle;
-        bool foundAngle = true;
         do {
-            ++firstIndex;
-            if (firstIndex >= angleCount) {
-                foundAngle = false;
-                break;
-            }
-            angle = sorted[firstIndex];
+            angle = sorted[++firstIndex];
             segment = angle->segment();
         } while (segment->windSum(angle) == SK_MinS32);
-        if (!foundAngle) {
-            continue;
-        }
     #if DEBUG_SORT
         segment->debugShowSort(__FUNCTION__, sorted, firstIndex, sortable);
     #endif
@@ -92,7 +83,7 @@ static SkOpSegment* findChaseOp(SkTDArray<SkOpSpan*>& chase, int& nextStart, int
                     nextEnd = end;
                 }
                 (void) segment->markAngle(maxWinding, sumWinding, oppMaxWinding,
-                    oppSumWinding, angle);
+                    oppSumWinding, true, angle);
             }
         } while (++nextIndex != lastIndex);
         if (first) {
@@ -144,8 +135,8 @@ static bool bridgeOp(SkTArray<SkOpContour*, true>& contourList, const SkPathOp o
     do {
         int index, endIndex;
         bool done;
-        SkOpSegment* current = FindSortableTop(contourList, SkOpAngle::kBinarySingle, &firstContour,
-                &index, &endIndex, &topLeft, &topUnsortable, &done);
+        SkOpSegment* current = FindSortableTop(contourList, &firstContour, &index, &endIndex,
+                &topLeft, &topUnsortable, &done, true);
         if (!current) {
             if (topUnsortable || !done) {
                 topUnsortable = false;
@@ -165,8 +156,8 @@ static bool bridgeOp(SkTArray<SkOpContour*, true>& contourList, const SkPathOp o
             #endif
                         if (simple->isEmpty()) {
                             simple->init();
+                            break;
                         }
-                        break;
                     }
                     SkASSERT(unsortable || !current->done());
                     int nextStart = index;
@@ -194,12 +185,8 @@ static bool bridgeOp(SkTArray<SkOpContour*, true>& contourList, const SkPathOp o
                 } while (!simple->isClosed() && (!unsortable
                         || !current->done(SkMin32(index, endIndex))));
                 if (current->activeWinding(index, endIndex) && !simple->isClosed()) {
-                    // FIXME : add to simplify, xor cpaths
-                    int min = SkMin32(index, endIndex);
-                    if (!unsortable && !simple->isEmpty()) {
-                        unsortable = current->checkSmall(min);
-                    }
                     SkASSERT(unsortable || simple->isEmpty());
+                    int min = SkMin32(index, endIndex);
                     if (!current->done(min)) {
                         current->addCurveTo(index, endIndex, simple, true);
                         current->markDoneBinary(min);
@@ -248,8 +235,8 @@ bool Op(const SkPath& one, const SkPath& two, SkPathOp op, SkPath* result) {
 #if DEBUG_SHOW_TEST_NAME
     char* debugName = DEBUG_FILENAME_STRING;
     if (debugName && debugName[0]) {
-        SkPathOpsDebug::BumpTestName(debugName);
-        SkPathOpsDebug::ShowPath(one, two, op, debugName);
+        DebugBumpTestName(debugName);
+        DebugShowPath(one, two, op, debugName);
     }
 #endif
     op = gOpInverse[op][one.isInverseFillType()][two.isInverseFillType()];
@@ -263,7 +250,7 @@ bool Op(const SkPath& one, const SkPath& two, SkPathOp op, SkPath* result) {
         op = kDifference_PathOp;
     }
 #if DEBUG_SORT || DEBUG_SWAP_TOP
-    SkPathOpsDebug::gSortCount = SkPathOpsDebug::gSortCountDefault;
+    gDebugSortCount = gDebugSortCountDefault;
 #endif
     // turn path into list of segments
     SkTArray<SkOpContour> contours;
@@ -304,7 +291,19 @@ bool Op(const SkPath& one, const SkPath& two, SkPathOp op, SkPath* result) {
     for (index = 0; index < contourList.count(); ++index) {
         total += contourList[index]->segments().count();
     }
-    HandleCoincidence(&contourList, total);
+#if DEBUG_SHOW_WINDING
+    SkOpContour::debugShowWindingValues(contourList);
+#endif
+    CoincidenceCheck(&contourList, total);
+#if DEBUG_SHOW_WINDING
+    SkOpContour::debugShowWindingValues(contourList);
+#endif
+    FixOtherTIndex(&contourList);
+    CheckEnds(&contourList);
+    SortSegments(&contourList);
+#if DEBUG_ACTIVE_SPANS || DEBUG_ACTIVE_SPANS_FIRST_ONLY
+    DebugShowActiveSpans(contourList);
+#endif
     // construct closed contours
     SkPathWriter wrapper(*result);
     bridgeOp(contourList, op, xorMask, xorOpMask, &wrapper);

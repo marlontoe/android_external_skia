@@ -13,10 +13,8 @@ GrGLContextInfo& GrGLContextInfo::operator= (const GrGLContextInfo& ctxInfo) {
     fGLVersion = ctxInfo.fGLVersion;
     fGLSLGeneration = ctxInfo.fGLSLGeneration;
     fVendor = ctxInfo.fVendor;
-    fRenderer = ctxInfo.fRenderer;
     fExtensions = ctxInfo.fExtensions;
     fIsMesa = ctxInfo.fIsMesa;
-    fIsChromium = ctxInfo.fIsChromium;
     *fGLCaps = *ctxInfo.fGLCaps.get();
     return *this;
 }
@@ -29,11 +27,6 @@ bool GrGLContextInfo::initialize(const GrGLInterface* interface) {
         const GrGLubyte* verUByte;
         GR_GL_CALL_RET(interface, verUByte, GetString(GR_GL_VERSION));
         const char* ver = reinterpret_cast<const char*>(verUByte);
-
-        const GrGLubyte* rendererUByte;
-        GR_GL_CALL_RET(interface, rendererUByte, GetString(GR_GL_RENDERER));
-        const char* renderer = reinterpret_cast<const char*>(rendererUByte);
-
         GrGLBinding binding = GrGLGetBindingInUseFromString(ver);
 
         if (0 != binding && interface->validate(binding) && fExtensions.init(binding, interface)) {
@@ -45,11 +38,7 @@ bool GrGLContextInfo::initialize(const GrGLInterface* interface) {
 
             fVendor = GrGLGetVendor(interface);
 
-            fRenderer = GrGLGetRendererFromString(renderer);
-
             fIsMesa = GrGLIsMesaFromVersionString(ver);
-
-            fIsChromium = GrGLIsChromiumFromRendererString(renderer);
 
             fGLCaps->init(*this, interface);
             return true;
@@ -67,9 +56,7 @@ void GrGLContextInfo::reset() {
     fGLVersion = GR_GL_VER(0, 0);
     fGLSLGeneration = static_cast<GrGLSLGeneration>(0);
     fVendor = kOther_GrGLVendor;
-    fRenderer = kOther_GrGLRenderer;
     fIsMesa = false;
-    fIsChromium = false;
     fExtensions.reset();
     fGLCaps->reset();
 }
@@ -86,13 +73,13 @@ GrGLContext::GrGLContext(const GrGLContext& ctx) {
 }
 
 GrGLContext& GrGLContext::operator = (const GrGLContext& ctx) {
-    SkRefCnt_SafeAssign(fInterface, ctx.fInterface);
+    GrSafeAssign(fInterface, ctx.fInterface);
     fInfo = ctx.fInfo;
     return *this;
 }
 
 void GrGLContext::reset() {
-    SkSafeSetNull(fInterface);
+    GrSafeSetNull(fInterface);
     fInfo.reset();
 }
 

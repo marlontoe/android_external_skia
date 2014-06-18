@@ -7,9 +7,9 @@
  */
 #include "Test.h"
 #include "SkBitmap.h"
-#include "SkBitmapDevice.h"
 #include "SkBitmapProcShader.h"
 #include "SkDeferredCanvas.h"
+#include "SkDevice.h"
 #include "SkGradientShader.h"
 #include "SkShader.h"
 #include "../src/image/SkSurface_Base.h"
@@ -33,7 +33,7 @@ static void TestDeferredCanvasBitmapAccess(skiatest::Reporter* reporter) {
     SkBitmap store;
 
     create(&store, SkBitmap::kARGB_8888_Config, 0xFFFFFFFF);
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
 
     canvas->clear(0x00000000);
@@ -57,7 +57,7 @@ public:
         return SkNEW_ARGS(SkCanvas, (fBitmap));
     }
 
-    virtual SkSurface* onNewSurface(const SkImageInfo&) SK_OVERRIDE {
+    virtual SkSurface* onNewSurface(const SkImage::Info&) SK_OVERRIDE {
         return NULL;
     }
 
@@ -259,7 +259,7 @@ static void TestDeferredCanvasFlush(skiatest::Reporter* reporter) {
     SkBitmap store;
 
     create(&store, SkBitmap::kARGB_8888_Config, 0xFFFFFFFF);
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
 
     canvas->clear(0x00000000);
@@ -279,7 +279,7 @@ static void TestDeferredCanvasFreshFrame(skiatest::Reporter* reporter) {
     partialRect.setXYWH(SkIntToScalar(0), SkIntToScalar(0),
         SkIntToScalar(1), SkIntToScalar(1));
     create(&store, SkBitmap::kARGB_8888_Config, 0xFFFFFFFF);
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
 
     // verify that frame is intially fresh
@@ -333,7 +333,7 @@ static void TestDeferredCanvasFreshFrame(skiatest::Reporter* reporter) {
         paint.setStyle(SkPaint::kFill_Style);
         SkBitmap bmp;
         create(&bmp, SkBitmap::kARGB_8888_Config, 0xFFFFFFFF);
-        bmp.setAlphaType(kOpaque_SkAlphaType);
+        bmp.setIsOpaque(true);
         SkShader* shader = SkShader::CreateBitmapShader(bmp,
             SkShader::kClamp_TileMode, SkShader::kClamp_TileMode);
         paint.setShader(shader)->unref();
@@ -371,7 +371,7 @@ static void TestDeferredCanvasFreshFrame(skiatest::Reporter* reporter) {
         paint.setStyle(SkPaint::kFill_Style);
         SkBitmap bmp;
         create(&bmp, SkBitmap::kARGB_8888_Config, 0xFFFFFFFF);
-        bmp.setAlphaType(kPremul_SkAlphaType);
+        bmp.setIsOpaque(false);
         SkShader* shader = SkShader::CreateBitmapShader(bmp,
             SkShader::kClamp_TileMode, SkShader::kClamp_TileMode);
         paint.setShader(shader)->unref();
@@ -433,9 +433,9 @@ static void TestDeferredCanvasFreshFrame(skiatest::Reporter* reporter) {
     }
 }
 
-class MockDevice : public SkBitmapDevice {
+class MockDevice : public SkDevice {
 public:
-    MockDevice(const SkBitmap& bm) : SkBitmapDevice(bm) {
+    MockDevice(const SkBitmap& bm) : SkDevice(bm) {
         fDrawBitmapCallCount = 0;
     }
     virtual void drawBitmap(const SkDraw&, const SkBitmap&,
@@ -502,7 +502,7 @@ static void TestDeferredCanvasBitmapCaching(skiatest::Reporter* reporter) {
     SkBitmap store;
     store.setConfig(SkBitmap::kARGB_8888_Config, 100, 100);
     store.allocPixels();
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     NotificationCounter notificationCounter;
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
     canvas->setNotificationClient(&notificationCounter);
@@ -585,7 +585,7 @@ static void TestDeferredCanvasSkip(skiatest::Reporter* reporter) {
     SkBitmap store;
     store.setConfig(SkBitmap::kARGB_8888_Config, 100, 100);
     store.allocPixels();
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     NotificationCounter notificationCounter;
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
     canvas->setNotificationClient(&notificationCounter);
@@ -606,7 +606,7 @@ static void TestDeferredCanvasBitmapShaderNoLeak(skiatest::Reporter* reporter) {
     SkBitmap store;
     store.setConfig(SkBitmap::kARGB_8888_Config, 100, 100);
     store.allocPixels();
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
     // test will fail if nbIterations is not in sync with
     // BITMAPS_TO_KEEP in SkGPipeWrite.cpp
@@ -652,7 +652,7 @@ static void TestDeferredCanvasBitmapSizeThreshold(skiatest::Reporter* reporter) 
 
     // 1 under : should not store the image
     {
-        SkBitmapDevice device(store);
+        SkDevice device(store);
         SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
         canvas->setBitmapSizeThreshold(39999);
         canvas->drawBitmap(sourceImage, 0, 0, NULL);
@@ -662,7 +662,7 @@ static void TestDeferredCanvasBitmapSizeThreshold(skiatest::Reporter* reporter) 
 
     // exact value : should store the image
     {
-        SkBitmapDevice device(store);
+        SkDevice device(store);
         SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
         canvas->setBitmapSizeThreshold(40000);
         canvas->drawBitmap(sourceImage, 0, 0, NULL);
@@ -672,7 +672,7 @@ static void TestDeferredCanvasBitmapSizeThreshold(skiatest::Reporter* reporter) 
 
     // 1 over : should still store the image
     {
-        SkBitmapDevice device(store);
+        SkDevice device(store);
         SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
         canvas->setBitmapSizeThreshold(40001);
         canvas->drawBitmap(sourceImage, 0, 0, NULL);
@@ -692,21 +692,17 @@ static PixelPtr getSurfacePixelPtr(SkSurface* surface, bool useGpu) {
 }
 
 static void TestDeferredCanvasSurface(skiatest::Reporter* reporter, GrContextFactory* factory) {
-    SkImageInfo imageSpec = {
+    SkImage::Info imageSpec = {
         10,  // width
         10,  // height
-        kPMColor_SkColorType,
-        kPremul_SkAlphaType
+        SkImage::kPMColor_ColorType,
+        SkImage::kPremul_AlphaType
     };
     SkSurface* surface;
     bool useGpu = NULL != factory;
 #if SK_SUPPORT_GPU
     if (useGpu) {
         GrContext* context = factory->get(GrContextFactory::kNative_GLContextType);
-        if (NULL == context) {
-            return;
-        }
-
         surface = SkSurface::NewRenderTarget(context, imageSpec);
     } else {
         surface = SkSurface::NewRaster(imageSpec);
@@ -763,11 +759,11 @@ static void TestDeferredCanvasSurface(skiatest::Reporter* reporter, GrContextFac
 }
 
 static void TestDeferredCanvasSetSurface(skiatest::Reporter* reporter, GrContextFactory* factory) {
-    SkImageInfo imageSpec = {
+    SkImage::Info imageSpec = {
         10,  // width
         10,  // height
-        kPMColor_SkColorType,
-        kPremul_SkAlphaType
+        SkImage::kPMColor_ColorType,
+        SkImage::kPremul_AlphaType
     };
     SkSurface* surface;
     SkSurface* alternateSurface;
@@ -775,9 +771,6 @@ static void TestDeferredCanvasSetSurface(skiatest::Reporter* reporter, GrContext
 #if SK_SUPPORT_GPU
     if (useGpu) {
         GrContext* context = factory->get(GrContextFactory::kNative_GLContextType);
-        if (NULL == context) {
-            return;
-        }
         surface = SkSurface::NewRenderTarget(context, imageSpec);
         alternateSurface = SkSurface::NewRenderTarget(context, imageSpec);
     } else {
@@ -814,11 +807,11 @@ static void TestDeferredCanvasCreateCompatibleDevice(skiatest::Reporter* reporte
     SkBitmap store;
     store.setConfig(SkBitmap::kARGB_8888_Config, 100, 100);
     store.allocPixels();
-    SkBitmapDevice device(store);
+    SkDevice device(store);
     NotificationCounter notificationCounter;
     SkAutoTUnref<SkDeferredCanvas> canvas(SkDeferredCanvas::Create(&device));
     canvas->setNotificationClient(&notificationCounter);
-    SkAutoTUnref<SkBaseDevice> secondaryDevice(canvas->createCompatibleDevice(
+    SkAutoTUnref<SkDevice> secondaryDevice(canvas->createCompatibleDevice(
         SkBitmap::kARGB_8888_Config, 10, 10, device.isOpaque()));
     SkCanvas secondaryCanvas(secondaryDevice.get());
     SkRect rect = SkRect::MakeWH(5, 5);

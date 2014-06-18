@@ -8,6 +8,7 @@
 #include "SkCommandLineFlags.h"
 #include "SkGraphics.h"
 #include "SkOSFile.h"
+#include "SkRunnable.h"
 #include "SkTArray.h"
 #include "SkTemplates.h"
 #include "SkThreadPool.h"
@@ -83,23 +84,20 @@ public:
 
 protected:
     virtual void onStart(Test* test) {
-        SkAutoMutexAcquire lock(fStartEndMutex);
-        fNextIndex++;
-        fPending++;
-        SkDebugf("[%3d/%3d] (%d) %s\n", fNextIndex, fTotal, fPending, test->getName());
+        const int index = sk_atomic_inc(&fNextIndex);
+        sk_atomic_inc(&fPending);
+        SkDebugf("[%3d/%3d] (%d) %s\n", index+1, fTotal, fPending, test->getName());
     }
-
     virtual void onReportFailed(const SkString& desc) {
         SkDebugf("\tFAILED: %s\n", desc.c_str());
     }
 
     virtual void onEnd(Test* test) {
-        SkAutoMutexAcquire lock(fStartEndMutex);
         if (!test->passed()) {
             SkDebugf("---- %s FAILED\n", test->getName());
         }
 
-        fPending--;
+        sk_atomic_dec(&fPending);
         if (fNextIndex == fTotal) {
             // Just waiting on straggler tests.  Shame them by printing their name and runtime.
             SkDebugf("          (%d) %5.1fs %s\n",
@@ -108,11 +106,8 @@ protected:
     }
 
 private:
-    SkMutex fStartEndMutex;  // Guards fNextIndex and fPending.
     int32_t fNextIndex;
     int32_t fPending;
-
-    // Once the tests get going, these are logically const.
     int fTotal;
     bool fAllowExtendedTest;
     bool fAllowThreaded;
@@ -128,7 +123,7 @@ DEFINE_string2(match, m, NULL, "[~][^]substring[$] [...] of test name to run.\n"
                                "If a test does not match any list entry,\n" \
                                "it is skipped unless some list entry starts with ~");
 DEFINE_string2(tmpDir, t, NULL, "tmp directory for tests to use.");
-DEFINE_string2(resourcePath, i, "resources", "directory for test resources.");
+DEFINE_string2(resourcePath, i, NULL, "directory for test resources.");
 DEFINE_bool2(extendedTest, x, false, "run extended tests for pathOps.");
 DEFINE_bool2(single, z, false, "run tests on a single thread internally.");
 DEFINE_bool2(verbose, v, false, "enable verbose output.");
@@ -201,7 +196,6 @@ int tool_main(int argc, char** argv) {
 #else
         header.append(" SK_SCALAR_IS_FLOAT");
 #endif
-        header.appendf(" skia_arch_width=%d", (int)sizeof(void*) * 8);
         SkDebugf("%s\n", header.c_str());
     }
 
@@ -213,10 +207,15 @@ int tool_main(int argc, char** argv) {
     int toRun = 0;
     Test* test;
 
+    SkTDArray<const char*> matchStrs;
+    for(int i = 0; i < FLAGS_match.count(); ++i) {
+        matchStrs.push(FLAGS_match[i]);
+    }
+
     while ((test = iter.next()) != NULL) {
         SkAutoTDelete<Test> owned(test);
 
-        if(!SkCommandLineFlags::ShouldSkip(FLAGS_match, test->getName())) {
+        if(!SkCommandLineFlags::ShouldSkip(matchStrs, test->getName())) {
             toRun++;
         }
         total++;
@@ -228,16 +227,16 @@ int tool_main(int argc, char** argv) {
     int32_t failCount = 0;
     int skipCount = 0;
 
-    SkThreadPool threadpool(FLAGS_threads);
+    SkAutoTDelete<SkThreadPool> threadpool(SkNEW_ARGS(SkThreadPool, (FLAGS_threads)));
     SkTArray<Test*> unsafeTests;  // Always passes ownership to an SkTestRunnable
     for (int i = 0; i < total; i++) {
         SkAutoTDelete<Test> test(iter.next());
-        if (SkCommandLineFlags::ShouldSkip(FLAGS_match, test->getName())) {
+        if (SkCommandLineFlags::ShouldSkip(matchStrs, test->getName())) {
             ++skipCount;
         } else if (!test->isThreadsafe()) {
             unsafeTests.push_back() = test.detach();
         } else {
-            threadpool.add(SkNEW_ARGS(SkTestRunnable, (test.detach(), &failCount)));
+            threadpool->add(SkNEW_ARGS(SkTestRunnable, (test.detach(), &failCount)));
         }
     }
 
@@ -246,8 +245,8 @@ int tool_main(int argc, char** argv) {
         SkNEW_ARGS(SkTestRunnable, (unsafeTests[i], &failCount))->run();
     }
 
-    // Block until threaded tests finish.
-    threadpool.wait();
+    // Blocks until threaded tests finish.
+    threadpool.free();
 
     SkDebugf("Finished %d tests, %d failures, %d skipped.\n",
              toRun, failCount, skipCount);
@@ -255,6 +254,16 @@ int tool_main(int argc, char** argv) {
     if (FLAGS_verbose && testCount > 0) {
         SkDebugf("Ran %d Internal tests.\n", testCount);
     }
+#if SK_SUPPORT_GPU
+
+#if GR_CACHE_STATS
+    GrContext *gr = GpuTest::GetContext();
+
+    gr->printCacheStats();
+#endif
+
+#endif
+
     SkGraphics::Term();
     GpuTest::DestroyContexts();
 

@@ -17,6 +17,16 @@
     #define SNPRINTF    snprintf
 #endif
 
+SK_DEFINE_INST_COUNT(SkPDFArray)
+SK_DEFINE_INST_COUNT(SkPDFBool)
+SK_DEFINE_INST_COUNT(SkPDFDict)
+SK_DEFINE_INST_COUNT(SkPDFInt)
+SK_DEFINE_INST_COUNT(SkPDFName)
+SK_DEFINE_INST_COUNT(SkPDFObject)
+SK_DEFINE_INST_COUNT(SkPDFObjRef)
+SK_DEFINE_INST_COUNT(SkPDFScalar)
+SK_DEFINE_INST_COUNT(SkPDFString)
+
 ///////////////////////////////////////////////////////////////////////////////
 
 void SkPDFObject::emit(SkWStream* stream, SkPDFCatalog* catalog,

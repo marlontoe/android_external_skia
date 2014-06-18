@@ -25,6 +25,8 @@
         '<(skia_src_path)/pdf/SkPDFGraphicState.h',
         '<(skia_src_path)/pdf/SkPDFImage.cpp',
         '<(skia_src_path)/pdf/SkPDFImage.h',
+        '<(skia_src_path)/pdf/SkPDFImageStream.cpp',
+        '<(skia_src_path)/pdf/SkPDFImageStream.h',
         '<(skia_src_path)/pdf/SkPDFPage.cpp',
         '<(skia_src_path)/pdf/SkPDFPage.h',
         '<(skia_src_path)/pdf/SkPDFResourceDict.cpp',
@@ -38,5 +40,13 @@
         '<(skia_src_path)/pdf/SkPDFUtils.cpp',
         '<(skia_src_path)/pdf/SkPDFUtils.h',
         '<(skia_src_path)/pdf/SkTSet.h',
+
+        '<(skia_src_path)/doc/SkDocument_PDF.cpp',
     ],
 }
+
+# Local Variables:
+# tab-width:2
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=2 shiftwidth=2:

@@ -9,18 +9,19 @@
 #include "SkImageDecoder.h"
 #include "SkMovie.h"
 #include "SkStream.h"
+#include "SkTRegistry.h"
 
-extern SkImageDecoder* image_decoder_from_stream(SkStreamRewindable*);
+extern SkImageDecoder* image_decoder_from_stream(SkStream*);
 
-SkImageDecoder* SkImageDecoder::Factory(SkStreamRewindable* stream) {
+SkImageDecoder* SkImageDecoder::Factory(SkStream* stream) {
     return image_decoder_from_stream(stream);
 }
 
 /////////////////////////////////////////////////////////////////////////
 
-typedef SkTRegistry<SkMovie*(*)(SkStreamRewindable*)> MovieReg;
+typedef SkTRegistry<SkMovie*, SkStream*> MovieReg;
 
-SkMovie* SkMovie::DecodeStream(SkStreamRewindable* stream) {
+SkMovie* SkMovie::DecodeStream(SkStream* stream) {
     const MovieReg* curr = MovieReg::Head();
     while (curr) {
         SkMovie* movie = curr->factory()(stream);

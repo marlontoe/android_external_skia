@@ -62,8 +62,7 @@ public:
     SkPicturePlayback();
     SkPicturePlayback(const SkPicturePlayback& src, SkPictCopyInfo* deepCopyInfo = NULL);
     explicit SkPicturePlayback(const SkPictureRecord& record, bool deepCopy = false);
-    static SkPicturePlayback* CreateFromStream(SkStream*, const SkPictInfo&,
-                                               SkPicture::InstallPixelRefProc);
+    SkPicturePlayback(SkStream*, const SkPictInfo&, SkPicture::InstallPixelRefProc);
 
     virtual ~SkPicturePlayback();
 
@@ -73,8 +72,6 @@ public:
 
     void dumpSize() const;
 
-    bool containsBitmaps() const;
-
 #ifdef SK_BUILD_FOR_ANDROID
     // Can be called in the middle of playback (the draw() call). WIll abort the
     // drawing and return from draw() after the "current" op code is done
@@ -82,8 +79,6 @@ public:
 #endif
 
 protected:
-    bool parseStream(SkStream*, const SkPictInfo&,
-                     SkPicture::InstallPixelRefProc);
 #ifdef SK_DEVELOPER
     virtual bool preDraw(int opIndex, int type);
     virtual void postDraw(int opIndex);
@@ -196,9 +191,9 @@ public:
 #endif
 
 private:    // these help us with reading/writing
-    bool parseStreamTag(SkStream*, const SkPictInfo&, uint32_t tag, size_t size,
+    void parseStreamTag(SkStream*, const SkPictInfo&, uint32_t tag, size_t size,
                         SkPicture::InstallPixelRefProc);
-    bool parseBufferTag(SkOrderedReadBuffer&, uint32_t tag, size_t size);
+    void parseBufferTag(SkOrderedReadBuffer&, uint32_t tag, size_t size);
     void flattenToBuffer(SkOrderedWriteBuffer&) const;
 
 private:

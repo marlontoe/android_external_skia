@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
@@ -5,10 +6,11 @@
  * found in the LICENSE file.
  */
 
+
 #ifndef GrPathRendererChain_DEFINED
 #define GrPathRendererChain_DEFINED
 
-#include "SkRefCnt.h"
+#include "GrRefCnt.h"
 #include "SkTArray.h"
 
 class GrContext;
@@ -62,6 +64,7 @@ public:
                                     StencilSupport* stencilSupport);
 
 private:
+
     GrPathRendererChain();
 
     void init();
@@ -75,5 +78,6 @@ private:
 
     typedef SkRefCnt INHERITED;
 };
+
 
 #endif

@@ -14,12 +14,12 @@ class SkSurface_Gpu : public SkSurface_Base {
 public:
     SK_DECLARE_INST_COUNT(SkSurface_Gpu)
 
-    SkSurface_Gpu(GrContext*, const SkImageInfo&, int sampleCount);
+    SkSurface_Gpu(GrContext*, const SkImage::Info&, int sampleCount);
     SkSurface_Gpu(GrContext*, GrRenderTarget*);
     virtual ~SkSurface_Gpu();
 
     virtual SkCanvas* onNewCanvas() SK_OVERRIDE;
-    virtual SkSurface* onNewSurface(const SkImageInfo&) SK_OVERRIDE;
+    virtual SkSurface* onNewSurface(const SkImage::Info&) SK_OVERRIDE;
     virtual SkImage* onNewImageSnapshot() SK_OVERRIDE;
     virtual void onDraw(SkCanvas*, SkScalar x, SkScalar y,
                         const SkPaint*) SK_OVERRIDE;
@@ -31,16 +31,19 @@ private:
     typedef SkSurface_Base INHERITED;
 };
 
+SK_DEFINE_INST_COUNT(SkSurface_Gpu)
+
 ///////////////////////////////////////////////////////////////////////////////
 
-SkSurface_Gpu::SkSurface_Gpu(GrContext* ctx, const SkImageInfo& info,
+SkSurface_Gpu::SkSurface_Gpu(GrContext* ctx, const SkImage::Info& info,
                              int sampleCount)
         : INHERITED(info.fWidth, info.fHeight) {
-    SkBitmap::Config config = SkImageInfoToBitmapConfig(info);
+    bool isOpaque;
+    SkBitmap::Config config = SkImageInfoToBitmapConfig(info, &isOpaque);
 
     fDevice = SkNEW_ARGS(SkGpuDevice, (ctx, config, info.fWidth, info.fHeight, sampleCount));
 
-    if (!SkAlphaTypeIsOpaque(info.fAlphaType)) {
+    if (!isOpaque) {
         fDevice->clear(0x0);
     }
 }
@@ -62,7 +65,7 @@ SkCanvas* SkSurface_Gpu::onNewCanvas() {
     return SkNEW_ARGS(SkCanvas, (fDevice));
 }
 
-SkSurface* SkSurface_Gpu::onNewSurface(const SkImageInfo& info) {
+SkSurface* SkSurface_Gpu::onNewSurface(const SkImage::Info& info) {
     GrRenderTarget* rt = fDevice->accessRenderTarget();
     int sampleCount = rt->numSamples();
     return SkSurface::NewRenderTarget(fDevice->context(), info, sampleCount);
@@ -111,12 +114,13 @@ SkSurface* SkSurface::NewRenderTargetDirect(GrContext* ctx,
     return SkNEW_ARGS(SkSurface_Gpu, (ctx, target));
 }
 
-SkSurface* SkSurface::NewRenderTarget(GrContext* ctx, const SkImageInfo& info, int sampleCount) {
+SkSurface* SkSurface::NewRenderTarget(GrContext* ctx, const SkImage::Info& info, int sampleCount) {
     if (NULL == ctx) {
         return NULL;
     }
 
-    SkBitmap::Config config = SkImageInfoToBitmapConfig(info);
+    bool isOpaque;
+    SkBitmap::Config config = SkImageInfoToBitmapConfig(info, &isOpaque);
 
     GrTextureDesc desc;
     desc.fFlags = kRenderTarget_GrTextureFlagBit | kCheckAllocation_GrTextureFlagBit;

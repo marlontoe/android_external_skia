@@ -27,16 +27,13 @@ const static char kJsonKey_Hashtype_Bitmap_64bitMD5[]  = "bitmap-64bitMD5";
 
 
 namespace skiagm {
+    SK_DEFINE_INST_COUNT(ExpectationsSource)
+
     void gm_fprintf(FILE *stream, const char format[], ...) {
         va_list args;
         va_start(args, format);
         fprintf(stream, "GM: ");
         vfprintf(stream, format, args);
-#ifdef SK_BUILD_FOR_WIN
-        if (stderr == stream || stdout == stream) {
-            fflush(stream);
-        }
-#endif
         va_end(args);
     }
 
@@ -139,12 +136,6 @@ namespace skiagm {
         fAllowedResultDigests.push_back(GmResultDigest(bitmap));
     }
 
-    Expectations::Expectations(const BitmapAndDigest& bitmapAndDigest) {
-        fBitmap = bitmapAndDigest.fBitmap;
-        fIgnoreFailure = false;
-        fAllowedResultDigests.push_back(bitmapAndDigest.fDigest);
-    }
-
     Expectations::Expectations(Json::Value jsonElement) {
         if (jsonElement.empty()) {
             fIgnoreFailure = kDefaultIgnoreFailure;
@@ -207,7 +198,7 @@ namespace skiagm {
 
     // IndividualImageExpectationsSource class...
 
-    Expectations IndividualImageExpectationsSource::get(const char *testName) const {
+    Expectations IndividualImageExpectationsSource::get(const char *testName) {
         SkString path = SkOSPath::SkPathJoin(fRootDir.c_str(), testName);
         SkBitmap referenceBitmap;
         bool decodedReferenceBitmap =
@@ -230,7 +221,7 @@ namespace skiagm {
         fJsonExpectedResults = fJsonRoot[kJsonKey_ExpectedResults];
     }
 
-    Expectations JsonExpectationsSource::get(const char *testName) const {
+    Expectations JsonExpectationsSource::get(const char *testName) {
         return Expectations(fJsonExpectedResults[testName]);
     }
 

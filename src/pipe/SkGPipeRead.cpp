@@ -15,10 +15,8 @@
 #include "SkReader32.h"
 #include "SkStream.h"
 
-#include "SkAnnotation.h"
 #include "SkColorFilter.h"
 #include "SkDrawLooper.h"
-#include "SkImageFilter.h"
 #include "SkMaskFilter.h"
 #include "SkOrderedReadBuffer.h"
 #include "SkPathEffect.h"
@@ -27,22 +25,6 @@
 #include "SkShader.h"
 #include "SkTypeface.h"
 #include "SkXfermode.h"
-
-static SkFlattenable::Type paintflat_to_flattype(PaintFlats pf) {
-    static const uint8_t gEffectTypesInPaintFlatsOrder[] = {
-        SkFlattenable::kSkColorFilter_Type,
-        SkFlattenable::kSkDrawLooper_Type,
-        SkFlattenable::kSkImageFilter_Type,
-        SkFlattenable::kSkMaskFilter_Type,
-        SkFlattenable::kSkPathEffect_Type,
-        SkFlattenable::kSkRasterizer_Type,
-        SkFlattenable::kSkShader_Type,
-        SkFlattenable::kSkXfermode_Type,
-    };
-
-    SkASSERT((size_t)pf < SK_ARRAY_COUNT(gEffectTypesInPaintFlatsOrder));
-    return (SkFlattenable::Type)gEffectTypesInPaintFlatsOrder[pf];
-}
 
 static void set_paintflat(SkPaint* paint, SkFlattenable* obj, unsigned paintFlat) {
     SkASSERT(paintFlat < kCount_PaintFlats);
@@ -70,6 +52,9 @@ static void set_paintflat(SkPaint* paint, SkFlattenable* obj, unsigned paintFlat
             break;
         case kXfermode_PaintFlat:
             paint->setXfermode((SkXfermode*)obj);
+            break;
+        case kAnnotation_PaintFlat:
+            paint->setAnnotation((SkAnnotation*)obj);
             break;
         default:
             SkDEBUGFAIL("never gets here");
@@ -122,7 +107,7 @@ public:
 
     void defFlattenable(PaintFlats pf, int index) {
         index--;
-        SkFlattenable* obj = fReader->readFlattenable(paintflat_to_flattype(pf));
+        SkFlattenable* obj = fReader->readFlattenable();
         if (fFlatArray.count() == index) {
             *fFlatArray.append() = obj;
         } else {
@@ -587,15 +572,10 @@ static void drawBitmapRect_rp(SkCanvas* canvas, SkReader32* reader,
     } else {
         src = NULL;
     }
-    SkCanvas::DrawBitmapRectFlags dbmrFlags = SkCanvas::kNone_DrawBitmapRectFlag;
-    if (flags & kDrawBitmap_Bleed_DrawOpFlag) {
-        dbmrFlags = (SkCanvas::DrawBitmapRectFlags)(dbmrFlags|SkCanvas::kBleed_DrawBitmapRectFlag);
-    }
     const SkRect* dst = skip<SkRect>(reader);
     const SkBitmap* bitmap = holder.getBitmap();
     if (state->shouldDraw()) {
-        canvas->drawBitmapRectToRect(*bitmap, src, *dst,
-                                     hasPaint ? &state->paint() : NULL, dbmrFlags);
+        canvas->drawBitmapRectToRect(*bitmap, src, *dst, hasPaint ? &state->paint() : NULL);
     }
 }
 
@@ -687,20 +667,6 @@ static void typeface_rp(SkCanvas*, SkReader32* reader, uint32_t,
     p->setTypeface(static_cast<SkTypeface*>(reader->readPtr()));
 }
 
-static void annotation_rp(SkCanvas*, SkReader32* reader, uint32_t op32,
-                          SkGPipeState* state) {
-    SkPaint* p = state->editPaint();
-
-    const size_t size = DrawOp_unpackData(op32);
-    if (size > 0) {
-        SkOrderedReadBuffer buffer(reader->skip(size), size);
-        p->setAnnotation(SkNEW_ARGS(SkAnnotation, (buffer)))->unref();
-        SkASSERT(buffer.offset() == size);
-    } else {
-        p->setAnnotation(NULL);
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 static void def_Typeface_rp(SkCanvas*, SkReader32*, uint32_t, SkGPipeState* state) {
@@ -784,8 +750,6 @@ static const ReadProc gReadTable[] = {
 
     paintOp_rp,
     typeface_rp,
-    annotation_rp,
-
     def_Typeface_rp,
     def_PaintFlat_rp,
     def_Bitmap_rp,

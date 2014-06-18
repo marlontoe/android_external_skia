@@ -13,28 +13,45 @@
 #include "GrPaint.h"
 
 class GrContext;
-class GrDrawTarget;
+class GrTextStrike;
 class GrFontScaler;
+class GrDrawTarget;
 
-/*
- * This class wraps the state for a single text render
- */
 class GrTextContext {
 public:
-    virtual void drawPackedGlyph(GrGlyph::PackedID, GrFixed left, GrFixed top,
-                                 GrFontScaler*) = 0;
-
-protected:
     GrTextContext(GrContext*, const GrPaint&);
-    virtual ~GrTextContext() {}
+    ~GrTextContext();
 
-    GrPaint                fPaint;
-    GrContext*             fContext;
-    GrDrawTarget*          fDrawTarget;
+    void drawPackedGlyph(GrGlyph::PackedID, GrFixed left, GrFixed top,
+                         GrFontScaler*);
 
-    SkIRect                fClipRect;
+    void flush();   // optional; automatically called by destructor
 
 private:
+    GrPaint         fPaint;
+    GrContext*      fContext;
+    GrDrawTarget*   fDrawTarget;
+
+    GrFontScaler*   fScaler;
+    GrTextStrike*   fStrike;
+
+    inline void flushGlyphs();
+    void setupDrawTarget();
+
+    enum {
+        kMinRequestedGlyphs      = 1,
+        kDefaultRequestedGlyphs  = 64,
+        kMinRequestedVerts       = kMinRequestedGlyphs * 4,
+        kDefaultRequestedVerts   = kDefaultRequestedGlyphs * 4,
+    };
+
+    SkPoint*                fVertices;
+    int32_t                 fMaxVertices;
+    GrTexture*              fCurrTexture;
+    int                     fCurrVertex;
+
+    SkIRect                 fClipRect;
+    GrContext::AutoMatrix   fAutoMatrix;
 };
 
 #endif

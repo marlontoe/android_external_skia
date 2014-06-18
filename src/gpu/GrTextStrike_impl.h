@@ -13,16 +13,16 @@
 
 class GrFontCache::Key {
 public:
-    explicit Key(const GrKey* fontScalarKey) {
-        fFontScalerKey = fontScalarKey;
+    Key(GrFontScaler* scaler) {
+        fFontScalerKey = scaler->getKey();
     }
 
-    intptr_t getHash() const { return fFontScalerKey->getHash(); }
+    uint32_t getHash() const { return fFontScalerKey->getHash(); }
 
-    static bool LessThan(const GrTextStrike& strike, const Key& key) {
+    static bool LT(const GrTextStrike& strike, const Key& key) {
         return *strike.getFontScalerKey() < *key.fFontScalerKey;
     }
-    static bool Equals(const GrTextStrike& strike, const Key& key) {
+    static bool EQ(const GrTextStrike& strike, const Key& key) {
         return *strike.getFontScalerKey() == *key.fFontScalerKey;
     }
 
@@ -32,30 +32,26 @@ private:
 
 void GrFontCache::detachStrikeFromList(GrTextStrike* strike) {
     if (strike->fPrev) {
-        SkASSERT(fHead != strike);
+        GrAssert(fHead != strike);
         strike->fPrev->fNext = strike->fNext;
     } else {
-        SkASSERT(fHead == strike);
+        GrAssert(fHead == strike);
         fHead = strike->fNext;
     }
 
     if (strike->fNext) {
-        SkASSERT(fTail != strike);
+        GrAssert(fTail != strike);
         strike->fNext->fPrev = strike->fPrev;
     } else {
-        SkASSERT(fTail == strike);
+        GrAssert(fTail == strike);
         fTail = strike->fPrev;
     }
 }
 
-#if SK_DISTANCEFIELD_FONTS
-GrTextStrike* GrFontCache::getStrike(GrFontScaler* scaler, bool useDistanceField) {
-#else
 GrTextStrike* GrFontCache::getStrike(GrFontScaler* scaler) {
-#endif
     this->validate();
 
-    const Key key(scaler->getKey());
+    Key key(scaler);
     GrTextStrike* strike = fCache.find(key);
     if (NULL == strike) {
         strike = this->generateStrike(scaler, key);
@@ -69,9 +65,7 @@ GrTextStrike* GrFontCache::getStrike(GrFontScaler* scaler) {
         strike->fPrev = NULL;
         fHead = strike;
     }
-#if SK_DISTANCEFIELD_FONTS
-    strike->fUseDistanceField = useDistanceField;
-#endif
+
     this->validate();
     return strike;
 }
@@ -88,10 +82,10 @@ public:
 
     uint32_t getHash() const { return fPackedID; }
 
-    static bool LessThan(const GrGlyph& glyph, const Key& key) {
+    static bool LT(const GrGlyph& glyph, const Key& key) {
         return glyph.fPackedID < key.fPackedID;
     }
-    static bool Equals(const GrGlyph& glyph, const Key& key) {
+    static bool EQ(const GrGlyph& glyph, const Key& key) {
         return glyph.fPackedID == key.fPackedID;
     }
 

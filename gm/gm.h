@@ -9,16 +9,12 @@
 #define skiagm_DEFINED
 
 #include "SkBitmap.h"
-#include "SkBitmapDevice.h"
 #include "SkCanvas.h"
+#include "SkDevice.h"
 #include "SkPaint.h"
 #include "SkSize.h"
 #include "SkString.h"
 #include "SkTRegistry.h"
-
-#if SK_SUPPORT_GPU
-#include "GrContext.h"
-#endif
 
 #define DEF_GM(code) \
     static skiagm::GM*          SK_MACRO_APPEND_LINE(F_)(void*) { code; } \
@@ -38,17 +34,13 @@ namespace skiagm {
         virtual ~GM();
 
         enum Flags {
-            kSkipPDF_Flag               = 1 << 0,
-            kSkipPicture_Flag           = 1 << 1,
-            kSkipPipe_Flag              = 1 << 2,
-            kSkipPipeCrossProcess_Flag  = 1 << 3,
-            kSkipTiled_Flag             = 1 << 4,
-            kSkip565_Flag               = 1 << 5,
-            kSkipScaledReplay_Flag      = 1 << 6,
-            kSkipGPU_Flag               = 1 << 7,
-            kSkipPDFRasterization_Flag  = 1 << 8,
-
-            kGPUOnly_Flag               = 1 << 9,
+            kSkipPDF_Flag           = 1 << 0,
+            kSkipPicture_Flag       = 1 << 1,
+            kSkipPipe_Flag          = 1 << 2,
+            kSkipTiled_Flag         = 1 << 3,
+            kSkip565_Flag           = 1 << 4,
+            kSkipScaledReplay_Flag  = 1 << 5,
+            kSkipGPU_Flag           = 1 << 6,
         };
 
         void draw(SkCanvas*);
@@ -74,9 +66,7 @@ namespace skiagm {
         // Most GMs will return the identity matrix, but some PDFs tests
         // require setting the initial transform.
         SkMatrix getInitialTransform() const {
-            SkMatrix matrix = fStarterMatrix;
-            matrix.preConcat(this->onGetInitialTransform());
-            return matrix;
+            return this->onGetInitialTransform();
         }
 
         SkColor getBGColor() const { return fBGColor; }
@@ -99,11 +89,6 @@ namespace skiagm {
             fCanvasIsDeferred = isDeferred;
         }
 
-    const SkMatrix& getStarterMatrix() { return fStarterMatrix; }
-    void setStarterMatrix(const SkMatrix& matrix) {
-        fStarterMatrix = matrix;
-    }
-
     protected:
         static SkString gResourcePath;
 
@@ -120,10 +105,9 @@ namespace skiagm {
         SkColor  fBGColor;
         bool     fCanvasIsDeferred; // work-around problem in srcmode.cpp
         bool     fHaveCalledOnceBeforeDraw;
-        SkMatrix fStarterMatrix;
     };
 
-    typedef SkTRegistry<GM*(*)(void*)> GMRegistry;
+    typedef SkTRegistry<GM*, void*> GMRegistry;
 }
 
 #endif

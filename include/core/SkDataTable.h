@@ -10,6 +10,7 @@
 
 #include "SkChunkAlloc.h"
 #include "SkData.h"
+#include "SkFlattenable.h"
 #include "SkString.h"
 #include "SkTDArray.h"
 
@@ -18,7 +19,7 @@
  *  organized into a table of entries, each with a length, so the entries are
  *  not required to all be the same size.
  */
-class SK_API SkDataTable : public SkRefCnt {
+class SK_API SkDataTable : public SkFlattenable {
 public:
     SK_DECLARE_INST_COUNT(SkDataTable)
 
@@ -93,6 +94,12 @@ public:
     static SkDataTable* NewArrayProc(const void* array, size_t elemSize,
                                      int count, FreeProc proc, void* context);
 
+    SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkDataTable)
+
+protected:
+    SkDataTable(SkFlattenableReadBuffer&);
+    virtual void flatten(SkFlattenableWriteBuffer&) const SK_OVERRIDE;
+
 private:
     struct Dir {
         const void* fPtr;
@@ -117,7 +124,7 @@ private:
 
     friend class SkDataTableBuilder;    // access to Dir
 
-    typedef SkRefCnt INHERITED;
+    typedef SkFlattenable INHERITED;
 };
 
 /**

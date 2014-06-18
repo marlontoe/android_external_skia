@@ -12,7 +12,7 @@ class PerlinNoiseBench : public SkBenchmark {
     SkISize fSize;
 
 public:
-    PerlinNoiseBench()  {
+    PerlinNoiseBench(void* param) : INHERITED(param) {
         fSize = SkISize::Make(80, 80);
     }
 
@@ -21,9 +21,9 @@ protected:
         return "perlinnoise";
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
-        this->test(loops, canvas, 0, 0, SkPerlinNoiseShader::kFractalNoise_Type,
-                   0.1f, 0.1f, 3, 0, false);
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
+        this->test(canvas, 0, 0, SkPerlinNoiseShader::kFractalNoise_Type,
+             0.1f, 0.1f, 3, 0, false);
     }
 
 private:
@@ -38,7 +38,7 @@ private:
         canvas->restore();
     }
 
-    void test(const int loops, SkCanvas* canvas, int x, int y, SkPerlinNoiseShader::Type type,
+    void test(SkCanvas* canvas, int x, int y, SkPerlinNoiseShader::Type type,
               float baseFrequencyX, float baseFrequencyY, int numOctaves, float seed,
               bool stitchTiles) {
         SkShader* shader = (type == SkPerlinNoiseShader::kFractalNoise_Type) ?
@@ -48,10 +48,7 @@ private:
                                                  seed, stitchTiles ? &fSize : NULL);
         SkPaint paint;
         paint.setShader(shader)->unref();
-
-        for (int i = 0; i < loops; i++) {
-            this->drawClippedRect(canvas, x, y, paint);
-        }
+        this->drawClippedRect(canvas, x, y, paint);
     }
 
     typedef SkBenchmark INHERITED;
@@ -59,4 +56,4 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return new PerlinNoiseBench(); )
+DEF_BENCH( return new PerlinNoiseBench(p); )

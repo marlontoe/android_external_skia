@@ -52,10 +52,9 @@ static uint8_t compute_666_index(SkPMColor c) {
     return conv_byte_to_6(r) * 36 + conv_byte_to_6(g) * 6 + conv_byte_to_6(b);
 }
 
-static void convert_to_index666(const SkBitmap& src, SkBitmap* dst,
-                                bool isOpaque) {
-    SkPMColor storage[216];
-    SkPMColor* colors = storage;
+static void convert_to_index666(const SkBitmap& src, SkBitmap* dst) {
+    SkColorTable* ctable = new SkColorTable(216);
+    SkPMColor* colors = ctable->lockColors();
     // rrr ggg bbb
     for (int r = 0; r < 6; r++) {
         int rr = conv_6_to_byte(r);
@@ -67,8 +66,7 @@ static void convert_to_index666(const SkBitmap& src, SkBitmap* dst,
             }
         }
     }
-    SkAlphaType aType = isOpaque ? kOpaque_SkAlphaType : kPremul_SkAlphaType;
-    SkColorTable* ctable = new SkColorTable(storage, 216, aType);
+    ctable->unlockColors(true);
     dst->setConfig(SkBitmap::kIndex8_Config, src.width(), src.height());
     dst->allocPixels(ctable);
     ctable->unref();
@@ -91,8 +89,9 @@ class RepeatTileBench : public SkBenchmark {
     SkBitmap         fBitmap;
     bool             fIsOpaque;
     SkBitmap::Config fConfig;
+    enum { N = SkBENCHLOOP(20) };
 public:
-    RepeatTileBench(SkBitmap::Config c, bool isOpaque = false)  {
+    RepeatTileBench(void* param, SkBitmap::Config c, bool isOpaque = false) : INHERITED(param) {
         const int w = 50;
         const int h = 50;
         fConfig = c;
@@ -115,14 +114,13 @@ protected:
     virtual void onPreDraw() SK_OVERRIDE {
         fBitmap.allocPixels();
         fBitmap.eraseColor(fIsOpaque ? SK_ColorWHITE : 0);
-        fBitmap.setAlphaType(fIsOpaque ?
-                             kOpaque_SkAlphaType : kPremul_SkAlphaType);
+        fBitmap.setIsOpaque(fIsOpaque);
 
         draw_into_bitmap(fBitmap);
 
         if (SkBitmap::kIndex8_Config == fConfig) {
             SkBitmap tmp;
-            convert_to_index666(fBitmap, &tmp, fIsOpaque);
+            convert_to_index666(fBitmap, &tmp);
             fBitmap = tmp;
         }
 
@@ -133,11 +131,11 @@ protected:
     }
 
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) SK_OVERRIDE {
+    virtual void onDraw(SkCanvas* canvas) SK_OVERRIDE {
         SkPaint paint(fPaint);
         this->setupPaint(&paint);
 
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < N; i++) {
             canvas->drawPaint(paint);
         }
     }
@@ -146,7 +144,7 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
-DEF_BENCH(return new RepeatTileBench(SkBitmap::kARGB_8888_Config, true))
-DEF_BENCH(return new RepeatTileBench(SkBitmap::kARGB_8888_Config, false))
-DEF_BENCH(return new RepeatTileBench(SkBitmap::kRGB_565_Config))
-DEF_BENCH(return new RepeatTileBench(SkBitmap::kIndex8_Config))
+DEF_BENCH(return new RepeatTileBench(p, SkBitmap::kARGB_8888_Config, true))
+DEF_BENCH(return new RepeatTileBench(p, SkBitmap::kARGB_8888_Config, false))
+DEF_BENCH(return new RepeatTileBench(p, SkBitmap::kRGB_565_Config))
+DEF_BENCH(return new RepeatTileBench(p, SkBitmap::kIndex8_Config))

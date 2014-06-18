@@ -23,17 +23,22 @@ class AAClipBench : public SkBenchmark {
     bool     fDoPath;
     bool     fDoAA;
 
+    enum {
+        N = SkBENCHLOOP(200),
+    };
+
 public:
-    AAClipBench(bool doPath, bool doAA)
-        : fDoPath(doPath)
+    AAClipBench(void* param, bool doPath, bool doAA)
+        : INHERITED(param)
+        , fDoPath(doPath)
         , fDoAA(doAA) {
 
         fName.printf("aaclip_%s_%s",
                      doPath ? "path" : "rect",
                      doAA ? "AA" : "BW");
 
-        fClipRect.set(10.5f, 10.5f,
-                      50.5f, 50.5f);
+        fClipRect.set(SkFloatToScalar(10.5f), SkFloatToScalar(10.5f),
+                      SkFloatToScalar(50.5f), SkFloatToScalar(50.5f));
         fClipPath.addRoundRect(fClipRect, SkIntToScalar(10), SkIntToScalar(10));
         fDrawRect.set(SkIntToScalar(0), SkIntToScalar(0),
                       SkIntToScalar(100), SkIntToScalar(100));
@@ -43,12 +48,12 @@ public:
 
 protected:
     virtual const char* onGetName() { return fName.c_str(); }
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
 
         SkPaint paint;
         this->setupPaint(&paint);
 
-        for (int i = 0; i < loops; ++i) {
+        for (int i = 0; i < N; ++i) {
             // jostle the clip regions each time to prevent caching
             fClipRect.offset((i % 2) == 0 ? SkIntToScalar(10) : SkIntToScalar(-10), 0);
             fClipPath.reset();
@@ -91,13 +96,17 @@ class NestedAAClipBench : public SkBenchmark {
     SkRect   fDrawRect;
     SkRandom fRandom;
 
+    static const int kNumDraws = SkBENCHLOOP(2);
     static const int kNestingDepth = 3;
     static const int kImageSize = 400;
 
     SkPoint fSizes[kNestingDepth+1];
 
 public:
-    NestedAAClipBench(bool doAA) : fDoAA(doAA) {
+    NestedAAClipBench(void* param, bool doAA)
+        : INHERITED(param)
+        , fDoAA(doAA) {
+
         fName.printf("nested_aaclip_%s", doAA ? "AA" : "BW");
 
         fDrawRect = SkRect::MakeLTRB(0, 0,
@@ -158,9 +167,9 @@ protected:
             canvas->restore();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
 
-        for (int i = 0; i < loops; ++i) {
+        for (int i = 0; i < kNumDraws; ++i) {
             SkPoint offset = SkPoint::Make(0, 0);
             this->recurse(canvas, 0, offset);
         }
@@ -179,8 +188,12 @@ class AAClipBuilderBench : public SkBenchmark {
     bool     fDoPath;
     bool     fDoAA;
 
+    enum {
+        N = SkBENCHLOOP(200),
+    };
+
 public:
-    AAClipBuilderBench(bool doPath, bool doAA)  {
+    AAClipBuilderBench(void* param, bool doPath, bool doAA) : INHERITED(param) {
         fDoPath = doPath;
         fDoAA = doAA;
 
@@ -195,11 +208,11 @@ public:
 
 protected:
     virtual const char* onGetName() { return fName.c_str(); }
-    virtual void onDraw(const int loops, SkCanvas*) {
+    virtual void onDraw(SkCanvas*) {
         SkPaint paint;
         this->setupPaint(&paint);
 
-        for (int i = 0; i < loops; ++i) {
+        for (int i = 0; i < N; ++i) {
             SkAAClip clip;
             if (fDoPath) {
                 clip.setPath(fPath, &fRegion, fDoAA);
@@ -215,7 +228,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////
 class AAClipRegionBench : public SkBenchmark {
 public:
-    AAClipRegionBench()  {
+    AAClipRegionBench(void* param) : INHERITED(param) {
         SkPath path;
         // test conversion of a complex clip to a aaclip
         path.addCircle(0, 0, SkIntToScalar(200));
@@ -230,28 +243,48 @@ public:
 
 protected:
     virtual const char* onGetName() { return "aaclip_setregion"; }
-    virtual void onDraw(const int loops, SkCanvas*) {
-        for (int i = 0; i < loops; ++i) {
+    virtual void onDraw(SkCanvas*) {
+        for (int i = 0; i < N; ++i) {
             SkAAClip clip;
             clip.setRegion(fRegion);
         }
     }
 
 private:
+    enum {
+        N = SkBENCHLOOP(400),
+    };
     SkRegion fRegion;
     typedef SkBenchmark INHERITED;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return SkNEW_ARGS(AAClipBuilderBench, (false, false)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBuilderBench, (false, true)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBuilderBench, (true, false)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBuilderBench, (true, true)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipRegionBench, ()); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBench, (false, false)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBench, (false, true)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBench, (true, false)); )
-DEF_BENCH( return SkNEW_ARGS(AAClipBench, (true, true)); )
-DEF_BENCH( return SkNEW_ARGS(NestedAAClipBench, (false)); )
-DEF_BENCH( return SkNEW_ARGS(NestedAAClipBench, (true)); )
+static SkBenchmark* Fact0(void* p) { return SkNEW_ARGS(AAClipBuilderBench, (p, false, false)); }
+static SkBenchmark* Fact1(void* p) { return SkNEW_ARGS(AAClipBuilderBench, (p, false, true)); }
+static SkBenchmark* Fact2(void* p) { return SkNEW_ARGS(AAClipBuilderBench, (p, true, false)); }
+static SkBenchmark* Fact3(void* p) { return SkNEW_ARGS(AAClipBuilderBench, (p, true, true)); }
+
+static BenchRegistry gReg0(Fact0);
+static BenchRegistry gReg1(Fact1);
+static BenchRegistry gReg2(Fact2);
+static BenchRegistry gReg3(Fact3);
+
+static SkBenchmark* Fact01(void* p) { return SkNEW_ARGS(AAClipRegionBench, (p)); }
+static BenchRegistry gReg01(Fact01);
+
+static SkBenchmark* Fact000(void* p) { return SkNEW_ARGS(AAClipBench, (p, false, false)); }
+static SkBenchmark* Fact001(void* p) { return SkNEW_ARGS(AAClipBench, (p, false, true)); }
+static SkBenchmark* Fact002(void* p) { return SkNEW_ARGS(AAClipBench, (p, true, false)); }
+static SkBenchmark* Fact003(void* p) { return SkNEW_ARGS(AAClipBench, (p, true, true)); }
+
+static BenchRegistry gReg000(Fact000);
+static BenchRegistry gReg001(Fact001);
+static BenchRegistry gReg002(Fact002);
+static BenchRegistry gReg003(Fact003);
+
+static SkBenchmark* Fact004(void* p) { return SkNEW_ARGS(NestedAAClipBench, (p, false)); }
+static SkBenchmark* Fact005(void* p) { return SkNEW_ARGS(NestedAAClipBench, (p, true)); }
+
+static BenchRegistry gReg004(Fact004);
+static BenchRegistry gReg005(Fact005);

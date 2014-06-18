@@ -26,6 +26,7 @@ public:
         W = 200,
         H = 200,
         COUNT = 10,
+        N = SkBENCHLOOP(20000)
     };
 
     SkIRect randrect(SkRandom& rand, int i) {
@@ -33,7 +34,7 @@ public:
         return SkIRect::MakeXYWH(0, i*H/COUNT, w, H/COUNT);
     }
 
-    RegionContainBench(Proc proc, const char name[])  {
+    RegionContainBench(void* param, Proc proc, const char name[]) : INHERITED(param) {
         fProc = proc;
         fName.printf("region_contains_%s", name);
 
@@ -43,19 +44,17 @@ public:
         }
 
         fB.setRect(0, 0, H, W);
-    }
 
-    virtual bool isSuitableFor(Backend backend) SK_OVERRIDE {
-        return backend == kNonRendering_Backend;
+        fIsRendering = false;
     }
 
 protected:
     virtual const char* onGetName() { return fName.c_str(); }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    virtual void onDraw(SkCanvas*) {
         Proc proc = fProc;
 
-        for (int i = 0; i < loops; ++i) {
+        for (int i = 0; i < N; ++i) {
            proc(fA, fB);
         }
     }
@@ -64,4 +63,6 @@ private:
     typedef SkBenchmark INHERITED;
 };
 
-DEF_BENCH( return SkNEW_ARGS(RegionContainBench, (sect_proc, "sect")); )
+static SkBenchmark* gF0(void* p) { return SkNEW_ARGS(RegionContainBench, (p, sect_proc, "sect")); }
+
+static BenchRegistry gR0(gF0);

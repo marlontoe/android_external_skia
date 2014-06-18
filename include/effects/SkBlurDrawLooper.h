@@ -35,10 +35,6 @@ public:
         kAll_BlurFlag               = 0x07
     };
 
-    SkBlurDrawLooper(SkColor color, SkScalar sigma, SkScalar dx, SkScalar dy,
-                     uint32_t flags = kNone_BlurFlag);
-
-//    SK_ATTR_DEPRECATED("use sigma version")
     SkBlurDrawLooper(SkScalar radius, SkScalar dx, SkScalar dy, SkColor color,
                      uint32_t flags = kNone_BlurFlag);
     virtual ~SkBlurDrawLooper();
@@ -67,8 +63,6 @@ private:
         kDone
     };
     State   fState;
-
-    void init(SkScalar sigma, SkScalar dx, SkScalar dy, SkColor color, uint32_t flags);
 
     typedef SkDrawLooper INHERITED;
 };

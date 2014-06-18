@@ -10,17 +10,16 @@
 #ifndef SkPDFDevice_DEFINED
 #define SkPDFDevice_DEFINED
 
-#include "SkBitmapDevice.h"
 #include "SkBitmap.h"
 #include "SkCanvas.h"
+#include "SkDevice.h"
 #include "SkPaint.h"
 #include "SkPath.h"
-#include "SkPicture.h"
 #include "SkRect.h"
 #include "SkRefCnt.h"
 #include "SkStream.h"
 #include "SkTDArray.h"
-#include "SkTemplates.h"
+#include "SkTScopedPtr.h"
 
 class SkPDFArray;
 class SkPDFDevice;
@@ -41,11 +40,13 @@ struct ContentEntry;
 struct GraphicStateEntry;
 struct NamedDestination;
 
+typedef bool (*EncodeToDCTStream)(SkWStream* stream, const SkBitmap& bitmap, const SkIRect& rect);
+
 /** \class SkPDFDevice
 
     The drawing context for the PDF backend.
 */
-class SkPDFDevice : public SkBitmapDevice {
+class SkPDFDevice : public SkDevice {
 public:
     /** Create a PDF drawing context with the given width and height.
      *  72 points/in means letter paper is 612x792.
@@ -91,8 +92,7 @@ public:
                           bool pathIsMutable) SK_OVERRIDE;
     virtual void drawBitmapRect(const SkDraw& draw, const SkBitmap& bitmap,
                                 const SkRect* src, const SkRect& dst,
-                                const SkPaint& paint,
-                                SkCanvas::DrawBitmapRectFlags flags) SK_OVERRIDE;
+                                const SkPaint& paint) SK_OVERRIDE;
     virtual void drawBitmap(const SkDraw&, const SkBitmap& bitmap,
                             const SkMatrix& matrix, const SkPaint&) SK_OVERRIDE;
     virtual void drawSprite(const SkDraw&, const SkBitmap& bitmap, int x, int y,
@@ -110,7 +110,7 @@ public:
                               const SkPoint texs[], const SkColor colors[],
                               SkXfermode* xmode, const uint16_t indices[],
                               int indexCount, const SkPaint& paint) SK_OVERRIDE;
-    virtual void drawDevice(const SkDraw&, SkBaseDevice*, int x, int y,
+    virtual void drawDevice(const SkDraw&, SkDevice*, int x, int y,
                             const SkPaint&) SK_OVERRIDE;
 
     virtual void onAttachToCanvas(SkCanvas* canvas) SK_OVERRIDE;
@@ -143,7 +143,7 @@ public:
      *         encoding and decoding might not be worth the space savings,
      *         if any at all.
      */
-    void setDCTEncoder(SkPicture::EncodeBitmap encoder) {
+    void setDCTEncoder(EncodeToDCTStream encoder) {
         fEncoder = encoder;
     }
 
@@ -194,21 +194,6 @@ public:
         return *(fFontGlyphUsage.get());
     }
 
-
-    /**
-     *  rasterDpi - the DPI at which features without native PDF support
-     *              will be rasterized (e.g. draw image with perspective,
-     *              draw text with perspective, ...)
-     *              A larger DPI would create a PDF that reflects the original
-     *              intent with better fidelity, but it can make for larger
-     *              PDF files too, which would use more memory while rendering,
-     *              and it would be slower to be processed or sent online or
-     *              to printer.
-     */
-    void setRasterDpi(SkScalar rasterDpi) {
-        fRasterDpi = rasterDpi;
-    }
-
 protected:
     virtual bool onReadPixels(const SkBitmap& bitmap, int x, int y,
                               SkCanvas::Config8888) SK_OVERRIDE;
@@ -234,33 +219,32 @@ private:
     SkTDArray<SkPDFFont*> fFontResources;
     SkTDArray<SkPDFObject*> fShaderResources;
 
-    SkAutoTDelete<ContentEntry> fContentEntries;
+    SkTScopedPtr<ContentEntry> fContentEntries;
     ContentEntry* fLastContentEntry;
-    SkAutoTDelete<ContentEntry> fMarginContentEntries;
+    SkTScopedPtr<ContentEntry> fMarginContentEntries;
     ContentEntry* fLastMarginContentEntry;
     DrawingArea fDrawingArea;
 
     const SkClipStack* fClipStack;
 
     // Accessor and setter functions based on the current DrawingArea.
-    SkAutoTDelete<ContentEntry>* getContentEntries();
+    SkTScopedPtr<ContentEntry>* getContentEntries();
     ContentEntry* getLastContentEntry();
     void setLastContentEntry(ContentEntry* contentEntry);
 
     // Glyph ids used for each font on this device.
-    SkAutoTDelete<SkPDFGlyphSetMap> fFontGlyphUsage;
+    SkTScopedPtr<SkPDFGlyphSetMap> fFontGlyphUsage;
 
-    SkPicture::EncodeBitmap fEncoder;
-    SkScalar fRasterDpi;
+    EncodeToDCTStream fEncoder;
 
     SkPDFDevice(const SkISize& layerSize, const SkClipStack& existingClipStack,
                 const SkRegion& existingClipRegion);
 
-    // override from SkBaseDevice
-    virtual SkBaseDevice* onCreateCompatibleDevice(SkBitmap::Config config,
-                                                   int width, int height,
-                                                   bool isOpaque,
-                                                   Usage usage) SK_OVERRIDE;
+    // override from SkDevice
+    virtual SkDevice* onCreateCompatibleDevice(SkBitmap::Config config,
+                                               int width, int height,
+                                               bool isOpaque,
+                                               Usage usage) SK_OVERRIDE;
 
     void init();
     void cleanUp(bool clearFontUsage);
@@ -316,8 +300,7 @@ private:
 
 #ifdef SK_PDF_USE_PATHOPS
     bool handleInversePath(const SkDraw& d, const SkPath& origPath,
-                           const SkPaint& paint, bool pathIsMutable,
-                           const SkMatrix* prePathMatrix = NULL);
+                           const SkPaint& paint, bool pathIsMutable);
 #endif
     bool handleRectAnnotation(const SkRect& r, const SkMatrix& matrix,
                               const SkPaint& paint);
@@ -331,12 +314,7 @@ private:
     void defineNamedDestination(SkData* nameData, const SkPoint& point,
                                 const SkMatrix& matrix);
 
-    typedef SkBitmapDevice INHERITED;
-
-    // TODO(edisonn): Only SkDocument_PDF and SkPDFImageShader should be able to create
-    // an SkPDFDevice
-    //friend class SkDocument_PDF;
-    //friend class SkPDFImageShader;
+    typedef SkDevice INHERITED;
 };
 
 #endif

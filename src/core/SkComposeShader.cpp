@@ -27,15 +27,15 @@ SkComposeShader::SkComposeShader(SkShader* sA, SkShader* sB, SkXfermode* mode) {
 
 SkComposeShader::SkComposeShader(SkFlattenableReadBuffer& buffer) :
     INHERITED(buffer) {
-    fShaderA = buffer.readShader();
+    fShaderA = buffer.readFlattenableT<SkShader>();
     if (NULL == fShaderA) {
         fShaderA = SkNEW_ARGS(SkColorShader, (0));
     }
-    fShaderB = buffer.readShader();
+    fShaderB = buffer.readFlattenableT<SkShader>();
     if (NULL == fShaderB) {
         fShaderB = SkNEW_ARGS(SkColorShader, (0));
     }
-    fMode = buffer.readXfermode();
+    fMode = buffer.readFlattenableT<SkXfermode>();
 }
 
 SkComposeShader::~SkComposeShader() {
@@ -59,7 +59,6 @@ private:
     SkPaint*    fPaint;
     uint8_t     fAlpha;
 };
-#define SkAutoAlphaRestore(...) SK_REQUIRE_LOCAL_VAR(SkAutoAlphaRestore)
 
 void SkComposeShader::flatten(SkFlattenableWriteBuffer& buffer) const {
     this->INHERITED::flatten(buffer);

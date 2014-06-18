@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkRegion.h"
 #include "SkRandom.h"
 
@@ -99,7 +98,7 @@ enum {
     H = 256
 };
 
-static SkIRect randRect(SkRandom& rand) {
+static SkIRect randRect(SkMWCRandom& rand) {
     int x = rand.nextU() % W;
     int y = rand.nextU() % H;
     int w = rand.nextU() % W;
@@ -107,7 +106,7 @@ static SkIRect randRect(SkRandom& rand) {
     return SkIRect::MakeXYWH(x, y, w >> 1, h >> 1);
 }
 
-static void randRgn(SkRandom& rand, SkRegion* rgn, int n) {
+static void randRgn(SkMWCRandom& rand, SkRegion* rgn, int n) {
     rgn->setEmpty();
     for (int i = 0; i < n; ++i) {
         rgn->op(randRect(rand), SkRegion::kUnion_Op);
@@ -184,7 +183,7 @@ static void intersects_proc(skiatest::Reporter* reporter,
 static void test_proc(skiatest::Reporter* reporter,
                       void (*proc)(skiatest::Reporter*,
                                    const SkRegion& a, const SkRegion&)) {
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int i = 0; i < 10000; ++i) {
         SkRegion outer;
         randRgn(rand, &outer, 8);
@@ -194,7 +193,7 @@ static void test_proc(skiatest::Reporter* reporter,
     }
 }
 
-static void rand_rect(SkIRect* rect, SkRandom& rand) {
+static void rand_rect(SkIRect* rect, SkMWCRandom& rand) {
     int bits = 6;
     int shift = 32 - bits;
     rect->set(rand.nextU() >> shift, rand.nextU() >> shift,
@@ -223,7 +222,7 @@ static bool test_rects(const SkIRect rect[], int count) {
     return true;
 }
 
-DEF_TEST(Region, reporter) {
+static void TestRegion(skiatest::Reporter* reporter) {
     const SkIRect r2[] = {
         { 0, 0, 1, 1 },
         { 2, 2, 3, 3 },
@@ -238,7 +237,7 @@ DEF_TEST(Region, reporter) {
     };
     REPORTER_ASSERT(reporter, test_rects(rects, SK_ARRAY_COUNT(rects)));
 
-    SkRandom rand;
+    SkMWCRandom rand;
     for (int i = 0; i < 1000; i++) {
         SkRegion rgn0, rgn1;
 
@@ -255,3 +254,6 @@ DEF_TEST(Region, reporter) {
     test_empties(reporter);
     test_fromchrome(reporter);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Region", RegionTestClass, TestRegion)

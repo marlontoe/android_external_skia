@@ -14,7 +14,7 @@
 
 class SK_API SkMorphologyImageFilter : public SkImageFilter {
 public:
-    SkMorphologyImageFilter(int radiusX, int radiusY, SkImageFilter* input, const CropRect* cropRect);
+    SkMorphologyImageFilter(int radiusX, int radiusY, SkImageFilter* input);
 
 protected:
     SkMorphologyImageFilter(SkFlattenableReadBuffer& buffer);
@@ -32,10 +32,8 @@ private:
 
 class SK_API SkDilateImageFilter : public SkMorphologyImageFilter {
 public:
-    SkDilateImageFilter(int radiusX, int radiusY,
-                        SkImageFilter* input = NULL,
-                        const CropRect* cropRect = NULL)
-    : INHERITED(radiusX, radiusY, input, cropRect) {}
+    SkDilateImageFilter(int radiusX, int radiusY, SkImageFilter* input = NULL)
+    : INHERITED(radiusX, radiusY, input) {}
 
     virtual bool onFilterImage(Proxy*, const SkBitmap& src, const SkMatrix&,
                                SkBitmap* result, SkIPoint* offset) SK_OVERRIDE;
@@ -55,10 +53,8 @@ private:
 
 class SK_API SkErodeImageFilter : public SkMorphologyImageFilter {
 public:
-    SkErodeImageFilter(int radiusX, int radiusY,
-                       SkImageFilter* input = NULL,
-                       const CropRect* cropRect = NULL)
-    : INHERITED(radiusX, radiusY, input, cropRect) {}
+    SkErodeImageFilter(int radiusX, int radiusY, SkImageFilter* input = NULL)
+    : INHERITED(radiusX, radiusY, input) {}
 
     virtual bool onFilterImage(Proxy*, const SkBitmap& src, const SkMatrix&,
                                SkBitmap* result, SkIPoint* offset) SK_OVERRIDE;

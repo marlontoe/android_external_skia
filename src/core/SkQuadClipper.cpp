@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2009 The Android Open Source Project
  *
@@ -5,8 +6,21 @@
  * found in the LICENSE file.
  */
 
+
 #include "SkQuadClipper.h"
 #include "SkGeometry.h"
+
+static inline void clamp_le(SkScalar& value, SkScalar max) {
+    if (value > max) {
+        value = max;
+    }
+}
+
+static inline void clamp_ge(SkScalar& value, SkScalar min) {
+    if (value < min) {
+        value = min;
+    }
+}
 
 SkQuadClipper::SkQuadClipper() {
     fClip.setEmpty();

@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2010 Google Inc.
  *
@@ -5,10 +6,14 @@
  * found in the LICENSE file.
  */
 
+
+
 #ifndef GrKey_DEFINED
 #define GrKey_DEFINED
 
-class GrKey : public SkRefCnt {
+#include "GrRefCnt.h"
+
+class GrKey : public GrRefCnt {
 public:
     SK_DECLARE_INST_COUNT(GrKey)
 
@@ -32,7 +37,7 @@ protected:
 private:
     const Hash fHash;
 
-    typedef SkRefCnt INHERITED;
+    typedef GrRefCnt INHERITED;
 };
 
 #endif

@@ -47,12 +47,7 @@ enum SkError {
 
     /** Skia failed while trying to consume some external resource.
      */
-    kParseError_SkError,
-
-    /** Something went wrong internally; could be resource exhaustion but
-      * will often be a bug.
-     */
-    kInternalError_SkError
+    kParseError_SkError
 };
 
 /** Return the current per-thread error code.  Error codes are "sticky"; they

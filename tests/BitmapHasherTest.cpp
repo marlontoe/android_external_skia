@@ -31,7 +31,7 @@ namespace skiatest {
                               SkColor color) {
             bitmap.setConfig(config, width, height);
             REPORTER_ASSERT(fReporter, bitmap.allocPixels());
-            bitmap.setAlphaType(kOpaque_SkAlphaType);
+            bitmap.setIsOpaque(true);
             bitmap.eraseColor(color);
         }
 

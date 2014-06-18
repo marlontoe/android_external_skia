@@ -26,6 +26,7 @@ class VertBench : public SkBenchmark {
         COL = 20,
         PTS = (ROW + 1) * (COL + 1),
         IDX = ROW * COL * 6,
+        N = SkBENCHLOOP(10)
     };
 
     SkPoint fPts[PTS];
@@ -39,7 +40,7 @@ class VertBench : public SkBenchmark {
     }
 
 public:
-    VertBench() {
+    VertBench(void* param) : INHERITED(param) {
         const SkScalar dx = SkIntToScalar(W) / COL;
         const SkScalar dy = SkIntToScalar(H) / COL;
 
@@ -77,11 +78,11 @@ public:
 
 protected:
     virtual const char* onGetName() { return fName.c_str(); }
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(SkCanvas* canvas) {
         SkPaint paint;
         this->setupPaint(&paint);
 
-        for (int i = 0; i < loops; i++) {
+        for (int i = 0; i < N; i++) {
             canvas->drawVertices(SkCanvas::kTriangles_VertexMode, PTS,
                                  fPts, NULL, fColors, NULL, fIdx, IDX, paint);
         }
@@ -92,4 +93,6 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-DEF_BENCH( return SkNEW_ARGS(VertBench, ()); )
+static SkBenchmark* Fact(void* p) { return SkNEW_ARGS(VertBench, (p)); }
+
+static BenchRegistry gReg(Fact);

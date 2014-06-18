@@ -906,7 +906,7 @@ static const char* rrect_type(const SkRRect& rr) {
         case SkRRect::kSimple_Type: return "simple";
         case SkRRect::kComplex_Type: return "complex";
     }
-    SkDEBUGFAIL("never get here");
+    SkASSERT(!"never get here");
     return "";
 }
 

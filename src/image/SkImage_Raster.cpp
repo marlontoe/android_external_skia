@@ -24,14 +24,15 @@ public:
         if (info.fWidth > maxDimension || info.fHeight > maxDimension) {
             return false;
         }
-        if ((unsigned)info.fColorType > (unsigned)kLastEnum_SkColorType) {
+        if ((unsigned)info.fColorType > (unsigned)kLastEnum_ColorType) {
             return false;
         }
-        if ((unsigned)info.fAlphaType > (unsigned)kLastEnum_SkAlphaType) {
+        if ((unsigned)info.fAlphaType > (unsigned)kLastEnum_AlphaType) {
             return false;
         }
 
-        if (SkImageInfoToBitmapConfig(info) == SkBitmap::kNo_Config) {
+        bool isOpaque;
+        if (SkImageInfoToBitmapConfig(info, &isOpaque) == SkBitmap::kNo_Config) {
             return false;
         }
 
@@ -50,7 +51,7 @@ public:
 
     static SkImage* NewEmpty();
 
-    SkImage_Raster(const SkImageInfo&, SkData*, size_t rb);
+    SkImage_Raster(const SkImage::Info&, SkData*, size_t rb);
     virtual ~SkImage_Raster();
 
     virtual void onDraw(SkCanvas*, SkScalar, SkScalar, const SkPaint*) SK_OVERRIDE;
@@ -58,7 +59,7 @@ public:
     virtual bool getROPixels(SkBitmap*) const SK_OVERRIDE;
 
     // exposed for SkSurface_Raster via SkNewImageFromPixelRef
-    SkImage_Raster(const SkImageInfo&, SkPixelRef*, size_t rowBytes);
+    SkImage_Raster(const SkImage::Info&, SkPixelRef*, size_t rowBytes);
 
     SkPixelRef* getPixelRef() const { return fBitmap.pixelRef(); }
 
@@ -84,17 +85,23 @@ SkImage* SkImage_Raster::NewEmpty() {
 
 SkImage_Raster::SkImage_Raster(const Info& info, SkData* data, size_t rowBytes)
         : INHERITED(info.fWidth, info.fHeight) {
-    fBitmap.setConfig(info, rowBytes);
-    fBitmap.setPixelRef(SkNEW_ARGS(SkDataPixelRef, (info, data)))->unref();
+    bool isOpaque;
+    SkBitmap::Config config = SkImageInfoToBitmapConfig(info, &isOpaque);
+
+    fBitmap.setConfig(config, info.fWidth, info.fHeight, rowBytes);
+    fBitmap.setPixelRef(SkNEW_ARGS(SkDataPixelRef, (data)))->unref();
+    fBitmap.setIsOpaque(isOpaque);
     fBitmap.setImmutable();
 }
 
 SkImage_Raster::SkImage_Raster(const Info& info, SkPixelRef* pr, size_t rowBytes)
 : INHERITED(info.fWidth, info.fHeight) {
-    SkBitmap::Config config = SkImageInfoToBitmapConfig(info);
+    bool isOpaque;
+    SkBitmap::Config config = SkImageInfoToBitmapConfig(info, &isOpaque);
 
-    fBitmap.setConfig(config, info.fWidth, info.fHeight, rowBytes, info.fAlphaType);
+    fBitmap.setConfig(config, info.fWidth, info.fHeight, rowBytes);
     fBitmap.setPixelRef(pr);
+    fBitmap.setIsOpaque(isOpaque);
 }
 
 SkImage_Raster::~SkImage_Raster() {}
@@ -114,7 +121,7 @@ bool SkImage_Raster::getROPixels(SkBitmap* dst) const {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-SkImage* SkImage::NewRasterCopy(const SkImageInfo& info, const void* pixels, size_t rowBytes) {
+SkImage* SkImage::NewRasterCopy(const SkImage::Info& info, const void* pixels, size_t rowBytes) {
     if (!SkImage_Raster::ValidArgs(info, rowBytes)) {
         return NULL;
     }
@@ -132,7 +139,7 @@ SkImage* SkImage::NewRasterCopy(const SkImageInfo& info, const void* pixels, siz
 }
 
 
-SkImage* SkImage::NewRasterData(const SkImageInfo& info, SkData* pixelData, size_t rowBytes) {
+SkImage* SkImage::NewRasterData(const SkImage::Info& info, SkData* pixelData, size_t rowBytes) {
     if (!SkImage_Raster::ValidArgs(info, rowBytes)) {
         return NULL;
     }
@@ -154,7 +161,7 @@ SkImage* SkImage::NewRasterData(const SkImageInfo& info, SkData* pixelData, size
     return SkNEW_ARGS(SkImage_Raster, (info, data, rowBytes));
 }
 
-SkImage* SkNewImageFromPixelRef(const SkImageInfo& info, SkPixelRef* pr,
+SkImage* SkNewImageFromPixelRef(const SkImage::Info& info, SkPixelRef* pr,
                                 size_t rowBytes) {
     return SkNEW_ARGS(SkImage_Raster, (info, pr, rowBytes));
 }

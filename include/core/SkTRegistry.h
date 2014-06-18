@@ -16,11 +16,11 @@
     and provides a function-pointer. This can be used to auto-register a set of
     services, e.g. a set of image codecs.
  */
-template <typename T> class SkTRegistry : SkNoncopyable {
+template <typename T, typename P> class SkTRegistry : SkNoncopyable {
 public:
-    typedef T Factory;
+    typedef T (*Factory)(P);
 
-    explicit SkTRegistry(T fact) : fFact(fact) {
+    SkTRegistry(Factory fact) {
 #ifdef SK_BUILD_FOR_ANDROID
         // work-around for double-initialization bug
         {
@@ -33,14 +33,15 @@ public:
             }
         }
 #endif
+        fFact = fact;
         fChain = gHead;
-        gHead  = this;
+        gHead = this;
     }
 
     static const SkTRegistry* Head() { return gHead; }
 
     const SkTRegistry* next() const { return fChain; }
-    const Factory& factory() const { return fFact; }
+    Factory factory() const { return fFact; }
 
 private:
     Factory      fFact;
@@ -50,6 +51,6 @@ private:
 };
 
 // The caller still needs to declare an instance of this somewhere
-template <typename T> SkTRegistry<T>* SkTRegistry<T>::gHead;
+template <typename T, typename P> SkTRegistry<T, P>* SkTRegistry<T, P>::gHead;
 
 #endif

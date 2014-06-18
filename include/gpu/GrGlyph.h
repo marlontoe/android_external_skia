@@ -11,7 +11,7 @@
 #include "GrRect.h"
 #include "SkPath.h"
 
-class GrPlot;
+class GrAtlas;
 
 /*  Need this to be quad-state:
     - complete w/ image
@@ -22,14 +22,14 @@ class GrPlot;
 struct GrGlyph {
     typedef uint32_t PackedID;
 
-    GrPlot*     fPlot;
+    GrAtlas*    fAtlas;
     SkPath*     fPath;
     PackedID    fPackedID;
     GrIRect16   fBounds;
     GrIPoint16  fAtlasLocation;
 
     void init(GrGlyph::PackedID packed, const SkIRect& bounds) {
-        fPlot = NULL;
+        fAtlas = NULL;
         fPath = NULL;
         fPackedID = packed;
         fBounds.set(bounds);

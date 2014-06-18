@@ -5,39 +5,46 @@
  * found in the LICENSE file.
  */
 
-#include "SkDifferentPixelsMetric.h"
+#include <cstring>
 
 #include "SkBitmap.h"
+
+#include "SkDifferentPixelsMetric.h"
 #include "skpdiff_util.h"
 
-const char* SkDifferentPixelsMetric::getName() const {
+struct SkDifferentPixelsMetric::QueuedDiff {
+    bool finished;
+    double result;
+    SkTDArray<SkIPoint>* poi;
+};
+
+const char* SkDifferentPixelsMetric::getName() {
     return "different_pixels";
 }
 
-bool SkDifferentPixelsMetric::diff(SkBitmap* baseline, SkBitmap* test, bool computeMask,
-                                   Result* result) const {
+int SkDifferentPixelsMetric::queueDiff(SkBitmap* baseline, SkBitmap* test) {
     double startTime = get_seconds();
+    int diffID = fQueuedDiffs.count();
+    QueuedDiff* diff = fQueuedDiffs.push();
+    SkTDArray<SkIPoint>* poi = diff->poi = new SkTDArray<SkIPoint>();
+
+    // If we never end up running the kernel, include some safe defaults in the result.
+    diff->finished = false;
+    diff->result = -1;
 
     // Ensure the images are comparable
     if (baseline->width() != test->width() || baseline->height() != test->height() ||
         baseline->width() <= 0 || baseline->height() <= 0 ||
         baseline->config() != test->config()) {
-        return false;
+        diff->finished = true;
+        return diffID;
     }
 
     int width = baseline->width();
     int height = baseline->height();
-
-    // Prepare the POI alpha mask if needed
-    if (computeMask) {
-        result->poiAlphaMask.setConfig(SkBitmap::kA8_Config, width, height);
-        result->poiAlphaMask.allocPixels();
-        result->poiAlphaMask.lockPixels();
-        result->poiAlphaMask.eraseARGB(SK_AlphaOPAQUE, 0, 0, 0);
-    }
+    int differentPixelsCount = 0;
 
     // Prepare the pixels for comparison
-    result->poiCount = 0;
     baseline->lockPixels();
     test->lockPixels();
     for (int y = 0; y < height; y++) {
@@ -46,24 +53,43 @@ bool SkDifferentPixelsMetric::diff(SkBitmap* baseline, SkBitmap* test, bool comp
         unsigned char* testRow = (unsigned char*)test->getAddr(0, y);
         for (int x = 0; x < width; x++) {
             // Compare one pixel at a time so each differing pixel can be noted
-            if (memcmp(&baselineRow[x * 4], &testRow[x * 4], 4) != 0) {
-                result->poiCount++;
-                if (computeMask) {
-                    *result->poiAlphaMask.getAddr8(x,y) = SK_AlphaTRANSPARENT;
-                }
+            if (std::memcmp(&baselineRow[x * 4], &testRow[x * 4], 4) != 0) {
+                poi->push()->set(x, y);
+                differentPixelsCount++;
             }
         }
     }
     test->unlockPixels();
     baseline->unlockPixels();
 
-    if (computeMask) {
-        result->poiAlphaMask.unlockPixels();
-    }
-
     // Calculates the percentage of identical pixels
-    result->result = 1.0 - ((double)result->poiCount / (width * height));
-    result->timeElapsed = get_seconds() - startTime;
+    diff->result = 1.0 - ((double)differentPixelsCount / (width * height));
 
-    return true;
+    SkDebugf("Time: %f\n", (get_seconds() - startTime));
+
+    return diffID;
+}
+
+void SkDifferentPixelsMetric::deleteDiff(int id) {
+    if (NULL != fQueuedDiffs[id].poi)
+    {
+        delete fQueuedDiffs[id].poi;
+        fQueuedDiffs[id].poi = NULL;
+    }
+}
+
+bool SkDifferentPixelsMetric::isFinished(int id) {
+    return fQueuedDiffs[id].finished;
+}
+
+double SkDifferentPixelsMetric::getResult(int id) {
+    return fQueuedDiffs[id].result;
+}
+
+int SkDifferentPixelsMetric::getPointsOfInterestCount(int id) {
+    return fQueuedDiffs[id].poi->count();
+}
+
+SkIPoint* SkDifferentPixelsMetric::getPointsOfInterest(int id) {
+    return fQueuedDiffs[id].poi->begin();
 }

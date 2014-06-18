@@ -6,104 +6,89 @@
  * found in the LICENSE file.
  */
 
+
+
 #ifndef GrAtlas_DEFINED
 #define GrAtlas_DEFINED
 
-
 #include "GrPoint.h"
 #include "GrTexture.h"
-#include "GrDrawTarget.h"
 
 class GrGpu;
 class GrRectanizer;
 class GrAtlasMgr;
-class GrAtlas;
 
-// The backing GrTexture for a set of GrAtlases is broken into a spatial grid of GrPlots. When
-// a GrAtlas needs space on the texture, it requests a GrPlot. Each GrAtlas can claim one
-// or more GrPlots. The GrPlots keep track of subimage placement via their GrRectanizer. Once a
-// GrPlot is "full" (i.e. there is no room for the new subimage according to the GrRectanizer), the
-// GrAtlas can request a new GrPlot via GrAtlasMgr::addToAtlas().
-//
-// If all GrPlots are allocated, the replacement strategy is up to the client. The drawToken is
-// available to ensure that all draw calls are finished for that particular GrPlot.
-// GrAtlasMgr::removeUnusedPlots() will free up any finished plots for a given GrAtlas.
-
-class GrPlot {
+class GrAtlas {
 public:
-    int getOffsetX() const { return fOffset.fX; }
-    int getOffsetY() const { return fOffset.fY; }
+    int getPlotX() const { return fPlot.fX; }
+    int getPlotY() const { return fPlot.fY; }
+    GrMaskFormat getMaskFormat() const { return fMaskFormat; }
 
     GrTexture* texture() const { return fTexture; }
 
     bool addSubImage(int width, int height, const void*, GrIPoint16*);
 
-    GrDrawTarget::DrawToken drawToken() const { return fDrawToken; }
-    void setDrawToken(GrDrawTarget::DrawToken draw) { fDrawToken = draw; }
+    static void FreeLList(GrAtlas* atlas) {
+        while (NULL != atlas) {
+            GrAtlas* next = atlas->fNext;
+            delete atlas;
+            atlas = next;
+        }
+    }
+
+    static void MarkAllUnused(GrAtlas* atlas) {
+        while (NULL != atlas) {
+            atlas->fUsed = false;
+            atlas = atlas->fNext;
+        }
+    }
+
+    static bool RemoveUnusedAtlases(GrAtlasMgr* atlasMgr, GrAtlas** startAtlas);
+
+    bool used() const { return fUsed; }
+    void setUsed(bool used) { fUsed = used; }
 
 private:
-    GrPlot();
-    ~GrPlot(); // does not try to delete the fNext field
+    GrAtlas(GrAtlasMgr*, int plotX, int plotY, GrMaskFormat format);
+    ~GrAtlas(); // does not try to delete the fNext field
+
+    GrAtlas*        fNext;
 
     // for recycling
-    GrDrawTarget::DrawToken fDrawToken;
+    bool            fUsed;
 
-    GrPlot*                 fNext;
-
-    GrTexture*              fTexture;
-    GrRectanizer*           fRects;
-    GrAtlasMgr*             fAtlasMgr;
-    GrIPoint16              fOffset;
-    size_t                  fBytesPerPixel;
+    GrTexture*      fTexture;
+    GrRectanizer*   fRects;
+    GrAtlasMgr*     fAtlasMgr;
+    GrIPoint16      fPlot;
+    GrMaskFormat    fMaskFormat;
 
     friend class GrAtlasMgr;
 };
+
+class GrPlotMgr;
 
 class GrAtlasMgr {
 public:
-    GrAtlasMgr(GrGpu*, GrPixelConfig);
+    GrAtlasMgr(GrGpu*);
     ~GrAtlasMgr();
 
-    // add subimage of width, height dimensions to atlas
-    // returns the containing GrPlot and location relative to the backing texture
-    GrPlot* addToAtlas(GrAtlas*, int width, int height, const void*, GrIPoint16*);
+    GrAtlas* addToAtlas(GrAtlas**, int width, int height, const void*,
+                        GrMaskFormat, GrIPoint16*);
+    void deleteAtlas(GrAtlas* atlas) { delete atlas; }
 
-    // free up any plots that are not waiting on a draw call
-    bool removeUnusedPlots(GrAtlas* atlas);
-
-    // to be called by ~GrAtlas()
-    void deletePlotList(GrPlot* plot);
-
-    GrTexture* getTexture() const {
-        return fTexture;
+    GrTexture* getTexture(GrMaskFormat format) const {
+        GrAssert((unsigned)format < kCount_GrMaskFormats);
+        return fTexture[format];
     }
 
-private:
-    GrPlot* allocPlot();
-    void freePlot(GrPlot* plot);
-
-    GrGpu*        fGpu;
-    GrPixelConfig fPixelConfig;
-    GrTexture*    fTexture;
-
-    // allocated array of GrPlots
-    GrPlot*       fPlots;
-    // linked list of free GrPlots
-    GrPlot*       fFreePlots;
-};
-
-class GrAtlas {
-public:
-    GrAtlas(GrAtlasMgr* mgr) : fPlots(NULL), fAtlasMgr(mgr) { }
-    ~GrAtlas() { fAtlasMgr->deletePlotList(fPlots); }
-
-    bool isEmpty() { return NULL == fPlots; }
+    // to be called by ~GrAtlas()
+    void freePlot(GrMaskFormat format, int x, int y);
 
 private:
-    GrPlot*     fPlots;
-    GrAtlasMgr* fAtlasMgr;
-
-    friend class GrAtlasMgr;
+    GrGpu*      fGpu;
+    GrTexture*  fTexture[kCount_GrMaskFormats];
+    GrPlotMgr*  fPlotMgr;
 };
 
 #endif

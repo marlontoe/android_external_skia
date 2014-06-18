@@ -78,7 +78,6 @@ private:
     reference to each instantiated class.
 */
 class SkPDFFont : public SkPDFDict {
-    SK_DECLARE_INST_COUNT(SkPDFFont)
 public:
     virtual ~SkPDFFont();
 
@@ -199,7 +198,6 @@ private:
     // This should be made a hash table if performance is a problem.
     static SkTDArray<FontRec>& CanonicalFonts();
     static SkBaseMutex& CanonicalFontsMutex();
-    typedef SkPDFDict INHERITED;
 };
 
 #endif

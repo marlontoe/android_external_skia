@@ -10,6 +10,7 @@
 #include "CopyTilesRenderer.h"
 #include "PictureRenderer.h"
 #include "picture_utils.h"
+#include "SkBitmapFactory.h"
 #include "SkCommandLineFlags.h"
 #include "SkData.h"
 #include "SkImage.h"

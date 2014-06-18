@@ -90,7 +90,7 @@ public:
 
     static GrDebugGL *getInstance() {
         // someone should admit to actually using this class
-        SkASSERT(0 < gStaticRefCount);
+        GrAssert(0 < gStaticRefCount);
 
         if (NULL == gObj) {
             gObj = SkNEW(GrDebugGL);
@@ -106,7 +106,7 @@ public:
     }
 
     static void staticUnRef() {
-        SkASSERT(gStaticRefCount > 0);
+        GrAssert(gStaticRefCount > 0);
         gStaticRefCount--;
         if (0 == gStaticRefCount) {
             SkDELETE(gObj);

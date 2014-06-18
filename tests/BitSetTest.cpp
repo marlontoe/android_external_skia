@@ -1,15 +1,14 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkBitSet.h"
 
-DEF_TEST(BitSet, reporter) {
+static void TestBitSet(skiatest::Reporter* reporter) {
     SkBitSet set0(65536);
     REPORTER_ASSERT(reporter, set0.isBitSet(0) == false);
     REPORTER_ASSERT(reporter, set0.isBitSet(32767) == false);
@@ -75,3 +74,6 @@ DEF_TEST(BitSet, reporter) {
     set2 = set2;
     REPORTER_ASSERT(reporter, set2 == set3);
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("BitSet", BitSetTest, TestBitSet)

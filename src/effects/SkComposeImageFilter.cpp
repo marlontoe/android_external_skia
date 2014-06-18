@@ -52,6 +52,5 @@ bool SkComposeImageFilter::onFilterBounds(const SkIRect& src,
            outer->filterBounds(tmp, ctm, dst);
 }
 
-SkComposeImageFilter::SkComposeImageFilter(SkFlattenableReadBuffer& buffer)
-  : INHERITED(2, buffer) {
+SkComposeImageFilter::SkComposeImageFilter(SkFlattenableReadBuffer& buffer) : INHERITED(buffer) {
 }

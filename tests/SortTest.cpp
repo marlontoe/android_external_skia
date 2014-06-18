@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkRandom.h"
 #include "SkTSort.h"
 
@@ -16,7 +15,7 @@ extern "C" {
     }
 }
 
-static void rand_array(SkRandom& rand, int array[], int n) {
+static void rand_array(SkMWCRandom& rand, int array[], int n) {
     for (int j = 0; j < n; j++) {
         array[j] = rand.nextS() & 0xFF;
     }
@@ -33,7 +32,7 @@ static void check_sort(skiatest::Reporter* reporter, const char label[],
     }
 }
 
-DEF_TEST(Sort, reporter) {
+static void TestSort(skiatest::Reporter* reporter) {
     /** An array of random numbers to be sorted. */
     int randomArray[500];
     /** The reference sort of the random numbers. */
@@ -41,7 +40,7 @@ DEF_TEST(Sort, reporter) {
     /** The random numbers are copied into this array, sorted by an SkSort,
         then this array is compared against the reference sort. */
     int workingArray[SK_ARRAY_COUNT(randomArray)];
-    SkRandom    rand;
+    SkMWCRandom    rand;
 
     for (int i = 0; i < 10000; i++) {
         int count = rand.nextRangeU(1, SK_ARRAY_COUNT(randomArray));
@@ -62,3 +61,6 @@ DEF_TEST(Sort, reporter) {
 }
 
 // need tests for SkStrSearch
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Sort", SortTestClass, TestSort)

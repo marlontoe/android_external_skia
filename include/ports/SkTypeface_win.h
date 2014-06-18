@@ -1,9 +1,12 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
+
 
 #ifndef SkTypeface_win_DEFINED
 #define SkTypeface_win_DEFINED
@@ -32,11 +35,5 @@ SK_API void SkLOGFONTFromTypeface(const SkTypeface* typeface, LOGFONT* lf);
   *  remotely (re)loaded.
   */
 SK_API void SkTypeface_SetEnsureLOGFONTAccessibleProc(void (*)(const LOGFONT&));
-
-// Experimental!
-//
-class SkFontMgr;
-SK_API SkFontMgr* SkFontMgr_New_GDI();
-SK_API SkFontMgr* SkFontMgr_New_DirectWrite();
 
 #endif

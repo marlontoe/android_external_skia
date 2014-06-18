@@ -47,7 +47,7 @@ static void setup(SkPaint* paint, const SkBitmap& bm, bool filter,
                   SkShader::TileMode tmx, SkShader::TileMode tmy) {
     SkShader* shader = SkShader::CreateBitmapShader(bm, tmx, tmy);
     paint->setShader(shader)->unref();
-    paint->setFilterLevel(filter ? SkPaint::kLow_FilterLevel : SkPaint::kNone_FilterLevel);
+    paint->setFilterBitmap(filter);
 }
 
 static const SkBitmap::Config gConfigs[] = {
@@ -56,9 +56,11 @@ static const SkBitmap::Config gConfigs[] = {
 };
 
 class TilingGM : public skiagm::GM {
+    SkBlurDrawLooper    fLooper;
 public:
     TilingGM(bool powerOfTwoSize)
-            : fPowerOfTwoSize(powerOfTwoSize) {
+            : fLooper(SkIntToScalar(1), SkIntToScalar(2), SkIntToScalar(2), 0x88000000)
+            , fPowerOfTwoSize(powerOfTwoSize) {
     }
 
     SkBitmap    fTexture[SK_ARRAY_COUNT(gConfigs)];
@@ -110,6 +112,7 @@ protected:
                 SkString str;
                 p.setAntiAlias(true);
                 p.setDither(true);
+                p.setLooper(&fLooper);
                 str.printf("[%s,%s]", gModeNames[kx], gModeNames[ky]);
 
                 p.setTextAlign(SkPaint::kCenter_Align);
@@ -148,6 +151,7 @@ protected:
                     SkPaint p;
                     SkString str;
                     p.setAntiAlias(true);
+                    p.setLooper(&fLooper);
                     str.printf("%s, %s", gConfigNames[i], gFilterNames[j]);
                     canvas->drawText(str.c_str(), str.size(), x, y + r.height() * 2 / 3, p);
                 }

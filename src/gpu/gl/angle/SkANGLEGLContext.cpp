@@ -105,9 +105,3 @@ void SkANGLEGLContext::makeCurrent() const {
         SkDebugf("Could not set the context.\n");
     }
 }
-
-void SkANGLEGLContext::swapBuffers() const {
-    if (!eglSwapBuffers(fDisplay, fSurface)) {
-        SkDebugf("Could not complete eglSwapBuffers.\n");
-    }
-}

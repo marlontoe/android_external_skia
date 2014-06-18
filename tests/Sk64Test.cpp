@@ -1,12 +1,11 @@
+
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "Test.h"
-#include "TestClassDef.h"
 #include "SkRandom.h"
 #include <math.h>
 
@@ -32,7 +31,7 @@ static void bool_table_test(skiatest::Reporter* reporter,
     }
 #endif
 
-DEF_TEST(Sk64Test, reporter) {
+static void TestSk64(skiatest::Reporter* reporter) {
     enum BoolTests {
         kZero_BoolTest,
         kPos_BoolTest,
@@ -76,7 +75,7 @@ DEF_TEST(Sk64Test, reporter) {
 
     // Now test add/sub
 
-    SkRandom    rand;
+    SkMWCRandom    rand;
     int         i;
 
     for (i = 0; i < 1000; i++)
@@ -199,3 +198,6 @@ DEF_TEST(Sk64Test, reporter) {
     }
 #endif
 }
+
+#include "TestClassDef.h"
+DEFINE_TESTCLASS("Sk64", Sk64TestClass, TestSk64)

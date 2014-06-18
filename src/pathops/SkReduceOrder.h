@@ -18,10 +18,14 @@ union SkReduceOrder {
         kNo_Quadratics,
         kAllow_Quadratics
     };
+    enum Style {
+        kStroke_Style,
+        kFill_Style
+    };
 
-    int reduce(const SkDCubic& cubic, Quadratics);
+    int reduce(const SkDCubic& cubic, Quadratics, Style);
     int reduce(const SkDLine& line);
-    int reduce(const SkDQuad& quad);
+    int reduce(const SkDQuad& quad, Style);
 
     static SkPath::Verb Cubic(const SkPoint pts[4], SkPoint* reducePts);
     static SkPath::Verb Quad(const SkPoint pts[3], SkPoint* reducePts);

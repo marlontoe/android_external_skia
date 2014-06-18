@@ -117,14 +117,14 @@ protected:
 
     static SkSurface* compat_surface(SkCanvas* canvas, const SkISize& size,
                                      bool skipGPU) {
-        SkImageInfo info = {
+        SkImage::Info info = {
             size.width(),
             size.height(),
-            kPMColor_SkColorType,
-            kPremul_SkAlphaType
+            SkImage::kPMColor_ColorType,
+            SkImage::kPremul_AlphaType
         };
 #if SK_SUPPORT_GPU
-        SkBaseDevice* dev = canvas->getDevice();
+        SkDevice* dev = canvas->getDevice();
         if (!skipGPU && dev->accessRenderTarget()) {
             SkGpuDevice* gd = (SkGpuDevice*)dev;
             GrContext* ctx = gd->context();
