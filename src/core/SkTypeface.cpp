@@ -69,9 +69,6 @@ protected:
     }
 };
 
-SK_DECLARE_STATIC_MUTEX(gMutex);
-static const uint32_t FONT_STYLE_COUNT = 4;
-static SkTypeface* gDefaultTypefaces[FONT_STYLE_COUNT];
 SkTypeface* SkTypeface::GetDefaultTypeface(Style style) {
     // we keep a reference to this guy for all time, since if we return its
     // fontID, the font cache may later on ask to resolve that back into a
