@@ -483,6 +483,13 @@ void S32_D565_Blend_Dither_neon(uint16_t *dst, const SkPMColor *src,
     }
 }
 
+#if defined(ENABLE_OPTIMIZED_S32A_BLITTERS)
+/* External function in file S32A_Opaque_BlitRow32_neon.S */
+extern "C" void S32A_Opaque_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
+                                           const SkPMColor* SK_RESTRICT src,
+                                           int count, U8CPU alpha);
+
+#else
 void S32A_Opaque_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
                                 const SkPMColor* SK_RESTRICT src,
                                 int count, U8CPU alpha) {
@@ -585,6 +592,7 @@ void S32A_Opaque_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
         }
     }
 }
+#endif
 
 void S32A_Opaque_BlitRow32_neon_src_alpha(SkPMColor* SK_RESTRICT dst,
                                 const SkPMColor* SK_RESTRICT src,
@@ -836,6 +844,14 @@ void S32_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
     }
 }
 
+#if defined(ENABLE_OPTIMIZED_S32A_BLITTERS)
+/* External function in file S32A_Blend_BlitRow32_neon.S */
+extern "C" void S32A_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
+                                          const SkPMColor* SK_RESTRICT src,
+                                          int count, U8CPU alpha);
+
+#else
+
 void S32A_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
                          const SkPMColor* SK_RESTRICT src,
                          int count, U8CPU alpha) {
@@ -927,6 +943,7 @@ void S32A_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
         } while(count);
     }
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1433,7 +1450,7 @@ const SkBlitRow::Proc32 sk_blitrow_platform_32_procs_arm_neon[] = {
      * common cases the performance is equivalent or better than the standard
      * case where we do not inspect the src alpha.
      */
-#if SK_A32_SHIFT == 24
+#if !defined(ENABLE_OPTIMIZED_S32A_BLITTERS) && SK_A32_SHIFT == 24
     // This proc assumes the alpha value occupies bits 24-32 of each SkPMColor
     S32A_Opaque_BlitRow32_neon_src_alpha,   // S32A_Opaque,
 #else

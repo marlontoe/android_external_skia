@@ -50,6 +50,10 @@ endif
 
 LOCAL_CFLAGS += -DDCT_IFAST_SUPPORTED
 
+# Enable Neon assembler optimized version of S32A_Opaque_BlitRow32 and
+# S32A_Blend_Blitrow32. Overrides the intrinsic blitter below.
+LOCAL_CFLAGS += -DENABLE_OPTIMIZED_S32A_BLITTERS
+
 # using freetype's embolden allows us to adjust fake bold settings at
 # draw-time, at which point we know which SkTypeface is being drawn
 LOCAL_CFLAGS += -DSK_USE_FREETYPE_EMBOLDEN
@@ -523,6 +527,8 @@ ifneq ($(WITH_QC_PERF),true)
 endif
 
 LOCAL_SRC_FILES += \
+	src/opts/S32A_Opaque_BlitRow32_neon.S \
+	src/opts/S32A_Blend_BlitRow32_neon.S \
 	src/opts/memset16_neon.S \
 	src/opts/memset32_neon.S \
 	src/opts/SkBitmapProcState_arm_neon.cpp \
@@ -533,7 +539,7 @@ LOCAL_SRC_FILES += \
 	src/opts/SkMorphology_opts_neon.cpp \
 	src/opts/SkXfermode_opts_arm_neon.cpp \
 	src/opts/ext/S32_Opaque_D32_filter_DX_shaderproc_neon.cpp \
-    src/core/asm/SkBlitter_RGB16_NEON.S
+	src/core/asm/SkBlitter_RGB16_NEON.S
 endif
 
 LOCAL_SRC_FILES += \
