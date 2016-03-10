@@ -22,7 +22,6 @@
 
 
 #include <stdio.h>
-#include <dlfcn.h>
 extern "C" {
     #include "jpeglib.h"
     #include "jerror.h"
@@ -530,47 +529,10 @@ static bool get_src_config(const jpeg_decompress_struct& cinfo,
     return true;
 }
 
-// vendor specific library for HW JPEG decode
-static void *sVendorLibHandle = NULL;
-typedef bool (*CanDecodeHwPtr)(void *, int);
-typedef bool (*OnJpegDecodeHwPtr)(void *, void *, void *, void **);
-static CanDecodeHwPtr sCanDecodeHw = NULL;
-static OnJpegDecodeHwPtr sOnJpegDecodeHw = NULL;
-
 bool SkJPEGImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
 #ifdef TIME_DECODE
     SkAutoTime atm("JPEG Decode");
 #endif
-
-    // use HW JPEG Decoder if available
-    void *streamBuf = NULL;
-    SkMemoryStream tempStream;
-    int streamSize = stream->getLength();
-
-    if (!sVendorLibHandle)
-        sVendorLibHandle = dlopen("libjpeghw.so", RTLD_NOW);
-    if (sVendorLibHandle) {
-        if (!sCanDecodeHw)
-            sCanDecodeHw = (CanDecodeHwPtr)dlsym(sVendorLibHandle, "canDecodeHw");
-        if (!sOnJpegDecodeHw)
-            sOnJpegDecodeHw = (OnJpegDecodeHwPtr)dlsym(sVendorLibHandle, "onJpegDecodeHw");
-
-        if (sCanDecodeHw && sOnJpegDecodeHw) {
-            // check if HW Decoding is possible
-            if ((*sCanDecodeHw)(stream, (int)mode)) {
-                // and then call HW Decoder
-                if ((*sOnJpegDecodeHw)(this, stream, bm, &streamBuf)) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // if HW JPEG decode failed then reset the stream
-    if (streamBuf) {
-        tempStream.setMemoryOwned(streamBuf, streamSize);
-        stream = (SkStream *)&tempStream;
-    }
 
     JPEGAutoClean autoClean;
 
@@ -1170,7 +1132,10 @@ static WriteScanline ChooseWriter(const SkBitmap& bm) {
 
 class SkJPEGImageEncoder : public SkImageEncoder {
 protected:
-    virtual bool onEncode(SkWStream* stream, const SkBitmap& bm, int quality) {
+    virtual bool onEncode(SkWStream* stream, const SkBitmap& bm, int quality) SK_OVERRIDE;
+};
+
+bool SkJPEGImageEncoder::onEncode(SkWStream* stream, const SkBitmap& bm, int quality) {
 #ifdef TIME_ENCODE
         SkAutoTime atm("JPEG Encode");
 #endif
@@ -1239,8 +1204,7 @@ protected:
         jpeg_destroy_compress(&cinfo);
 
         return true;
-    }
-};
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 DEFINE_DECODER_CREATOR(JPEGImageDecoder);
