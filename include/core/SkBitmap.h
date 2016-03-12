@@ -248,10 +248,7 @@ public:
     */
     bool setConfig(Config, int width, int height, size_t rowBytes, SkAlphaType);
 
-    bool setConfig(Config config, int width, int height, size_t rowBytes = 0) {
-        return this->setConfig(config, width, height, rowBytes,
-                               kPremul_SkAlphaType);
-    }
+    bool setConfig(Config config, int width, int height, size_t rowBytes = 0);
 
     bool setConfig(const SkImageInfo& info, size_t rowBytes = 0);
 
